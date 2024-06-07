@@ -745,7 +745,8 @@ export default function Example() {
                 firstName: user.user?.firstName ?? "None",
                 lastName: user.user?.lastName ?? "None",
                 subjects: seletedSubjects,
-                meetingLink: meetingLink ?? undefined
+                meetingLink: meetingLink ?? undefined,
+                availability
               });
             }}
           >
@@ -764,6 +765,7 @@ export default function Example() {
             firstName: user.user!.firstName ?? "None",
             lastName: user.user!.lastName ?? "None",
             imageSrc: user.user!.imageUrl ?? "",
+            email: user.user!.primaryEmailAddress?.emailAddress ?? "None"
           });
         }}
       >

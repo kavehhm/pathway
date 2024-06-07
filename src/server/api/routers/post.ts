@@ -60,10 +60,11 @@ export const postRouter = createTRPCRouter({
         imageSrc: z.string(),
         firstName: z.string(),
         lastName: z.string(),
+        email: z.string()
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { id, firstName, lastName, imageSrc } = input;
+      const { id, firstName, lastName, imageSrc, email } = input;
 
       return ctx.db.user.create({
         data: {
@@ -71,6 +72,7 @@ export const postRouter = createTRPCRouter({
           firstName,
           lastName,
           imageSrc,
+          email
         },
       });
     }),
@@ -94,7 +96,8 @@ export const postRouter = createTRPCRouter({
         imageSrc: z.string().optional(),
         subjects: z.string().array().optional(),
         hourlyRate: z.number().optional(),
-        meetingLink: z.string().optional()
+        meetingLink: z.string().optional(),
+        availability: z.string().optional()
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -115,7 +118,8 @@ export const postRouter = createTRPCRouter({
         imageSrc,
         subjects,
         hourlyRate,
-        meetingLink
+        meetingLink,
+        availability
       } = input;
 
       return ctx.db.user.update({
@@ -138,7 +142,8 @@ export const postRouter = createTRPCRouter({
           imageSrc,
           subjects,
           hourlyRate,
-          meetingLink
+          meetingLink,
+          availability
         },
       });
     }),

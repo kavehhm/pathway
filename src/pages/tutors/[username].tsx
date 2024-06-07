@@ -333,7 +333,7 @@ const User = () => {
         </div>
       </div>
       <div id="bookappointment" className=" py-12 ">
-        <Cal  calLink="/pathwaytutors/15min" />
+        <Cal  calLink={tutor.data?.calendlyLink ?? "/pathwaytutors/15min"} />
       </div>
     </div>
   );

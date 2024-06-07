@@ -70,6 +70,7 @@ const Navbar = () => {
                           firstName: user.user!.firstName ?? "None",
                           lastName: user.user!.lastName ?? "None",
                           imageSrc: user.user!.imageUrl ?? "",
+                          email:   user.user!.primaryEmailAddress?.emailAddress ?? "None"
                         });
                       }}
                     >
@@ -155,6 +156,7 @@ const Navbar = () => {
                               firstName: user.user!.firstName ?? "None",
                               lastName: user.user!.lastName ?? "None",
                               imageSrc: user.user!.imageUrl ?? "",
+                              email: user.user!.primaryEmailAddress?.emailAddress ?? "None"
                             });
                           }}
                         >
