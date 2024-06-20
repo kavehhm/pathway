@@ -128,7 +128,7 @@ const User = () => {
                   src={tutor.data?.imageSrc}
                   alt={tutor.data?.firstName}
                   className={
-                    " hidden rounded-lg lg:col-span-2 lg:row-span-2 lg:block lg:w-auto"
+                    " hidden rounded-lg lg:col-span-2 lg:row-span-2 aspect-[2/2] object-cover w-full  lg:block lg:w-auto"
                   }
                 />
                 <img

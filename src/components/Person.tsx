@@ -25,7 +25,7 @@ const Person = ({person}: {person: {
               {person.name}
             </h3>
             <p className="text-base leading-7 text-gray-600">
-              {person.school}, {person.major}
+              <span className="text-black ">{person.school}</span>, {person.major}
             </p>
           </div>
         </div>
