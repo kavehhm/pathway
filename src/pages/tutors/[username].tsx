@@ -332,9 +332,11 @@ const User = () => {
           </div>
         </div>
       </div>
+
+     {tutor.data?.calendlyLink &&
       <div id="bookappointment" className=" py-12 ">
         <Cal  calLink={tutor.data?.calendlyLink ?? "/pathwaytutors/15min"} />
-      </div>
+      </div>}
     </div>
   );
 };
