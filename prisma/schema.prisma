@@ -1,0 +1,54 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider     = "postgresql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+model Availability {
+   id         String     @id @default(uuid())
+  userId     String
+  day        String
+  available  Boolean
+  timeRange  String?  @db.VarChar(255)
+  
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+
+model User {
+  id             String   @id @default(uuid())
+  username       String  @unique @default(cuid())
+  email          String   @default("None")
+  bio            String   @default("None")
+  clerkId        String   @unique
+  school         String   @default("None")
+  major          String   @default("None")
+  approved       Boolean  @default(false)
+  description    String   @default("None")
+  calendlyLink   String   @default("None")
+  reviewPoints   Int      @default(0)
+  gpa            Float    @default(0.0)
+  tutorInPerson  Boolean  @default(false)
+  reviewQuantity Int      @default(0)
+  country        String   @default("United States")
+  state          String   @default("California")
+  zipCode        Int      @default(00000)
+  firstName      String   @default("None")
+  lastName       String   @default("None")
+  imageSrc       String   @default("")
+  subjects       String[]
+  hourlyRate     Int      @default(0)
+  meetingLink    String?  
+
+  availability Availability[]
+}
