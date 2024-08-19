@@ -103,7 +103,10 @@ export const postRouter = createTRPCRouter({
         availability:  z.array(
           z.object({
             day: z.string(),
+            startTime: z.date().optional().nullable(),
+            endTime: z.date().optional().nullable(),
             available: z.boolean(),
+            visible: z.boolean(),
             timeRange: z.string().nullable(),
           })
         ),
@@ -171,8 +174,11 @@ export const postRouter = createTRPCRouter({
           data: availability.map((day) => ({
             userId: id,
             day: day.day,
+            visible: day.visible,
             available: day.available,
             timeRange: day.available ? day.timeRange : null,
+            startTime: day.startTime,
+            endTime: day.endTime
           })),
         });
 

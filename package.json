@@ -2,6 +2,7 @@
   "name": "pathway",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "next build",
     "db:push": "prisma db push",
@@ -23,7 +24,9 @@
     "@trpc/next": "^10.37.1",
     "@trpc/react-query": "^10.37.1",
     "@trpc/server": "^10.37.1",
+    "antd": "^5.20.2",
     "buffer": "^6.0.3",
+    "dayjs": "^1.11.12",
     "micro": "^10.0.1",
     "multiselect-react-dropdown": "^2.0.25",
     "next": "^14.0.0",
@@ -38,6 +41,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@babel/core": "^7.25.2",
     "@tailwindcss/forms": "^0.5.7",
     "@types/eslint": "^8.44.2",
     "@types/node": "^18.16.0",
