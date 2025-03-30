@@ -2,9 +2,13 @@ import { useClerk, UserButton, useSession, useUser } from "@clerk/nextjs";
 import { Dialog } from "@headlessui/react";
 import { Bars3Icon, XMarkIcon } from "@heroicons/react/20/solid";
 import Link from "next/link";
-import React, { useState } from "react";
+import Image from "next/image";
+import React, { useState, useEffect } from "react";
 import { LoaderIcon } from "react-hot-toast";
 import { api } from "~/utils/api";
+import "aos/dist/aos.css";
+import AOS from "aos";
+import ourlogo from '../../public/ourlogo.png'
 
 const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -18,18 +22,22 @@ const Navbar = () => {
     },
   });
 
+  useEffect(() => {
+    AOS.init({ duration: 1000 });
+  }, []); 
+
   const navigation = [{ name: "Tutors", href: "/tutors" }];
 
   return (
-    <header className="absolute inset-x-0  top-0 z-10 ">
+    <header  data-aos="fade-down" className="absolute inset-x-0 w-4/5 mx-auto px-4 bg-white shadow  rounded-2xl  mt-5 top-0 z-10 ">
       <nav
         className="flex items-center justify-between p-6 md:px-8"
         aria-label="Global"
       >
         <div className="flex md:flex-1">
           <Link href="/" className="-m-1.5 p-1.5">
-            <span className="sr-only">Your Company</span>
-            <p className="font-extrabold">P</p>
+            <Image src={ourlogo} alt="logo" width={80} height={80}/>
+            {/* <p className="font-extrabold text-3xl">P</p> */}
           </Link>
         </div>
         <div className="flex md:hidden">
@@ -43,13 +51,14 @@ const Navbar = () => {
               <Bars3Icon className="h-6 w-6" aria-hidden="true" />
             </button>
           )}
-        </div>
-        <div className="hidden md:flex md:gap-x-12">
+        </div> 
+        {/* HIDDEN TUTORS SECTION */}
+        {/* <div className="hidden md:flex md:gap-x-12">
           {navigation.map((item) => (
             <Link
               key={item.name}
               href={item.href}
-              className="text-sm font-semibold leading-6 text-gray-900 underline-offset-4 hover:underline"
+              className="text-lg font-semibold leading-6 text-gray-900 underline-offset-4 hover:underline"
             >
               {item.name}
             </Link>
@@ -58,24 +67,20 @@ const Navbar = () => {
             <>
               {tutor.isFetchedAfterMount ? (
                 <div className="text-sm font-semibold leading-6  text-gray-900 underline-offset-4 hover:underline">
-                  {tutor.data ? (
+                  {(tutor.data  && (tutor.data.approved)) ? (
                     <Link href={`/tutors/${tutor.data.username}`}>
                       View your profile
                     </Link>
                   ) : (
-                    <button
-                      onClick={() => {
-                        createTutor.mutate({
-                          id: user.user!.id,
-                          firstName: user.user!.firstName ?? "None",
-                          lastName: user.user!.lastName ?? "None",
-                          imageSrc: user.user!.imageUrl ?? "",
-                          email:   user.user!.primaryEmailAddress?.emailAddress ?? "None"
-                        });
-                      }}
-                    >
-                      Create your user profile
-                    </button>
+                    <Link
+                    key={
+                      "manage profile"
+                    }
+                    href={"/tutor-onboarding"}
+                    className="text-sm font-semibold leading-6 text-gray-900 underline-offset-4 hover:underline"
+                  >
+                    Complete your profile
+                  </Link>
                   )}
                 </div>
               ) : (
@@ -83,7 +88,8 @@ const Navbar = () => {
               )}
             </>
           )}
-        </div>
+        
+        </div> */}
         <div className="hidden md:flex md:flex-1 md:justify-end">
           {session?.status === "active" ? (
             <UserButton
@@ -92,13 +98,13 @@ const Navbar = () => {
               afterSignOutUrl="/"
             />
           ) : (
-            <div className="flex gap-7">
-             <button onClick={()=>openSignIn()} className="text-sm hover:underline font-semibold leading-6 text-gray-900">
+            <div className="flex gap-12">
+             <button onClick={()=>openSignIn()} className="text-lg bg-blue-600 whitespace-nowrap py-3 px-4 text-white rounded-2xl hover:underline font-semibold leading-6 ">
                 Log in
               </button>
             <button
               onClick={() => openSignUp()}
-              className="text-sm font-semibold hover:underline leading-6 text-gray-900"
+              className=" font-semibold whitespace-nowrap hover:underline leading-6 text-gray-900 text-lg"
             >
               Become a tutor <span aria-hidden="true">&rarr;</span>
             </button>
@@ -146,7 +152,7 @@ const Navbar = () => {
                 <>
                   {tutor.isFetchedAfterMount ? (
                     <div className="-mx-3 block rounded-lg px-3  py-2 text-base font-semibold leading-7 text-gray-900 underline-offset-4 hover:bg-gray-50 hover:underline">
-                      {tutor.data ? (
+                      {(tutor.data  && (tutor.data.approved))  ? (
                         <Link
                           onClick={() => setMobileMenuOpen(false)}
                           href={`/tutors/${tutor.data.username}`}
@@ -154,19 +160,15 @@ const Navbar = () => {
                           View your profile
                         </Link>
                       ) : (
-                        <button
-                          onClick={() => {
-                            createTutor.mutate({
-                              id: user.user!.id,
-                              firstName: user.user!.firstName ?? "None",
-                              lastName: user.user!.lastName ?? "None",
-                              imageSrc: user.user!.imageUrl ?? "",
-                              email: user.user!.primaryEmailAddress?.emailAddress ?? "None"
-                            });
-                          }}
-                        >
-                          Create your user profile
-                        </button>
+                        <Link
+                        key={
+                          "manage profile"
+                        }
+                        href={"/tutor-onboarding"}
+                        className="text-sm font-semibold leading-6 text-gray-900 underline-offset-4 hover:underline"
+                      >
+                        Complete your profile
+                      </Link>
                       )}
                     </div>
                   ) : (

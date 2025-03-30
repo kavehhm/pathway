@@ -69,6 +69,28 @@ export const postRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
       const { id, firstName, lastName, imageSrc, email } = input;
 
+      const apiUrl = "https://api.clerk.com/v2/event-types"
+      const apiKey = "cal_live_e6043df9d987d87182a3e6384cb2116a"
+      const payload = {
+        title: "testtutor",
+        slug: "tutornameslug",
+        lengthInMinutes: 60,
+        description: "testdescription"
+      }
+
+      // const response = await fetch(apiUrl, {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //     "Authorization": `Bearer ${apiKey}`,
+      //     'cal-api-version': '2024-06-14'
+      //   },
+      //   body: JSON.stringify(payload)
+      // })
+
+      // const data = await response.json()
+      // console.log(data)
+
       return ctx.db.user.create({
         data: {
           clerkId: id,
@@ -305,4 +327,6 @@ export const postRouter = createTRPCRouter({
       },
     });
   }),
+
+  
 });

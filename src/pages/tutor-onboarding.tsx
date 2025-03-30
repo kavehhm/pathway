@@ -16,7 +16,7 @@ import { UserButton, useUser } from "@clerk/nextjs";
 import Multiselect from "multiselect-react-dropdown";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import toast  from "react-hot-toast";
+import toast, { LoaderIcon } from "react-hot-toast";
 import { api } from "~/utils/api";
 import { useRouter } from "next/router";
 import schools from "~/schools";
@@ -26,7 +26,6 @@ import { AiOutlineExclamationCircle } from "react-icons/ai";
 import { TimePicker } from "antd";
 import { MdOutlineCancel } from "react-icons/md";
 import { CiCirclePlus } from "react-icons/ci";
-
 
 const BIO_LENGTH = 250;
 
@@ -127,37 +126,38 @@ export default function Example() {
     },
   ]);
 
- const handleAddTimeWindow = (day: string, oldIndex: number) => {
-  const newEntry = { ...availability[oldIndex], visible: false, startTime: null, endTime: null };
+  const handleAddTimeWindow = (day: string, oldIndex: number) => {
+    const newEntry = {
+      ...availability[oldIndex],
+      visible: false,
+      startTime: null,
+      endTime: null,
+    };
 
     // Find the index of the last occurrence of the specified day
     const lastIndex = availability
       .map((entry, index) => (entry.day === day ? index : -1))
-      .filter(index => index !== -1)
+      .filter((index) => index !== -1)
       .pop();
 
-      let updatedAvailability = []
-      if (lastIndex)
-      {
+    let updatedAvailability = [];
+    if (lastIndex) {
+      updatedAvailability = [
+        ...availability.slice(0, lastIndex + 1),
+        newEntry,
+        ...availability.slice(lastIndex + 1),
+      ];
+    } else {
+      updatedAvailability = [
+        ...availability.slice(0, oldIndex + 1),
+        newEntry,
+        ...availability.slice(oldIndex + 1),
+      ];
+    }
 
-
-    updatedAvailability = [
-      ...availability.slice(0, lastIndex + 1),
-      newEntry,
-      ...availability.slice(lastIndex + 1),
-    ];
-  }
-  else {
-    updatedAvailability = [
-      ...availability.slice(0, oldIndex + 1),
-      newEntry,
-      ...availability.slice(oldIndex + 1),
-    ];
-  }
-
-  console.log("updated availability" , updatedAvailability)
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
+    console.log("updated availability", updatedAvailability);
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
     setAvailability(updatedAvailability);
   };
 
@@ -202,27 +202,39 @@ export default function Example() {
     field: "available" | "timeRange",
     startDate: Date | undefined,
     endDate: Date | undefined,
+    dayToUpdate: string | undefined // New parameter
   ) => {
     setAvailability((prevAvailability) => {
       if (!prevAvailability || index < 0 || index >= prevAvailability.length) {
         // If previous availability is not defined or index is out of bounds, return as is
         return prevAvailability;
       }
-
+  
       const newAvailability = [...prevAvailability];
-
-      // Ensure the index exists in the newAvailability array
-      const currentItem = newAvailability[index];
-      if (currentItem) {
-        if (field === "available") {
-          currentItem.available = value === "YES";
-        } else if (field === "timeRange") {
-          currentItem.timeRange = value;
-          currentItem.startTime = startDate;
-          currentItem.endTime = endDate;
+  
+      // Update availability for all instances of the specified day
+      newAvailability.forEach((item, i) => {
+        if (dayToUpdate && item.day === dayToUpdate) {
+          // Update all instances of the specific day
+          if (field === "available") {
+            item.available = value === "YES";
+          } else if (field === "timeRange") {
+            item.timeRange = value;
+            item.startTime = startDate;
+            item.endTime = endDate;
+          }
+        } else if (i === index) {
+          // Update only the item at the index
+          if (field === "available") {
+            item.available = value === "YES";
+          } else if (field === "timeRange") {
+            item.timeRange = value;
+            item.startTime = startDate;
+            item.endTime = endDate;
+          }
         }
-      }
-
+      });
+  
       return newAvailability;
     });
   };
@@ -238,7 +250,7 @@ export default function Example() {
 
   if (tutor.data && tutor.isFetchedAfterMount)
     return (
-      <div className="p-10 lg:p-48">
+      <div className="p-10 mt-16 lg:p-48">
         <div className="space-y-12">
           <div className="border-b border-gray-900/10 pb-12">
             <h2 className="text-base font-semibold leading-7 text-gray-900">
@@ -713,7 +725,6 @@ export default function Example() {
                     tutor.data?.availability.length > 0 &&
                     Array.isArray(tutor.data.availability)
                   ) && <AiOutlineExclamationCircle className="text-red-600" />}
-                 
                 </label>
                 {/* <div className="mt-2">
                   <textarea
@@ -727,97 +738,101 @@ export default function Example() {
                   />
                 </div> */}
                 {/* AVAILABILITY FORM */}
-                 
-                  <div className="space-y-4 py-6">
-                    {availability.map((day, index) => (
-                      <div
-                        key={index}
-                        className="grid grid-cols-3 items-center gap-4"
-                      >
-                        {day.visible && (
-                          <>
-                            <label className="font-semibold">{day.day}</label>
-                            <select
-                              className="rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                              value={day.available ? "YES" : "NO"}
-                              onChange={(e) =>
+
+                <div className="space-y-4 py-6">
+                  {availability.map((day, index) => (
+                    <div
+                      key={index}
+                      className=" items-center gap-4"
+                    >
+                      {day.visible && (
+  <div className="flex items-center gap-3 mb-4">
+    <label className="font-semibold">{day.day}</label>
+    <label className="flex items-center space-x-2">
+      <input
+        type="checkbox"
+        checked={day.available}
+        onChange={(e) => {
+          // Update all instances of the day when unchecked
+          handleAvailabilityChange(
+            index,
+            e.target.checked ? "YES" : "NO",
+            "available",
+            undefined,
+            undefined,
+             day.day
+          );
+        }}
+        className="h-8 w-8 md:h-4 md:w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+      />
+    </label>
+  </div>
+)}
+                      {day.available && (
+                        // <input
+                        //   type="text"
+                        //   placeholder="9:00 am - 5:00 pm"
+                        //   value={day.timeRange as string}
+                        //   onChange={(e) =>
+                        //     handleAvailabilityChange(
+                        //       index,
+                        //       e.target.value,
+                        //       "timeRange",
+                        //     )
+                        //   }
+                        //   className="rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                        // />
+                        <div
+                          className={`flex ${
+                            !day.visible && `col-start-3`
+                          } items-center gap-4`}
+                        >
+                          <TimePicker.RangePicker
+                            placeholder={[
+                              day.startTime?.toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }) ?? "Start Time",
+                              day.endTime?.toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }) ?? "End Time",
+                            ]}
+                            needConfirm={false}
+                            className="w-full md:w-fit "
+                            minuteStep={15}
+                            format={"h:mm a"}
+                            onCalendarChange={(dates, dateStrings, info) => {
+                              if (info.range == "end") {
                                 handleAvailabilityChange(
                                   index,
-                                  e.target.value,
-                                  "available",
-                                  undefined,
-                                  undefined,
-                                )
+                                  `${dateStrings[0]} - ${dateStrings[1]}`,
+                                  "timeRange",
+                                  dates[0]?.toDate(),
+                                  dates[1]?.toDate(),
+                                  day.day
+                                );
                               }
-                            >
-                              <option value="YES">YES</option>
-                              <option value="NO">NO</option>
-                            </select>
-                          </>
-                        )}
-                        {day.available && (
-                          // <input
-                          //   type="text"
-                          //   placeholder="9:00 am - 5:00 pm"
-                          //   value={day.timeRange as string}
-                          //   onChange={(e) =>
-                          //     handleAvailabilityChange(
-                          //       index,
-                          //       e.target.value,
-                          //       "timeRange",
-                          //     )
-                          //   }
-                          //   className="rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                          // />
-                          <div className={`flex ${!day.visible && `col-start-3`} items-center gap-4`}>
-                            <TimePicker.RangePicker
-                              placeholder={[
-                                day.startTime?.toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }) ?? "Start Time",
-                                day.endTime?.toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }) ?? "End Time",
-                              ]}
-                              needConfirm={false}
-                              minuteStep={15}
-                              format={"h:mm a"}
-                              onCalendarChange={(dates, dateStrings, info) => {
-                                if (info.range == "end") {
-                                  handleAvailabilityChange(
-                                    index,
-                                    `${dateStrings[0]} - ${dateStrings[1]}`,
-                                    "timeRange",
-                                    dates[0]?.toDate(),
-                                    dates[1]?.toDate(),
-                                  );
-                                }
-                              }}
+                            }}
+                          />
+                          {day.visible ? (
+                            <CiCirclePlus
+                              onClick={() =>
+                                handleAddTimeWindow(day.day, index)
+                              }
+                              className=" cursor-pointer text-3xl font-bold text-indigo-600"
                             />
-                            {day.visible ? (
-                              <CiCirclePlus 
-                                onClick={() => handleAddTimeWindow(day.day, index)}
-                                className=" cursor-pointer text-lg font-bold text-indigo-600"
-                              />
-                                
-                              
-                            ) : (
-                              
-                              <MdOutlineCancel
-                                onClick={() => handleRemoveTimeWindow(index)}
-                                className="cursor-pointer text-red-600"
-                              />
-                                
-                              
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  
+                          ) : (
+                            <MdOutlineCancel
+                              onClick={() => handleRemoveTimeWindow(index)}
+                              className="cursor-pointer text-3xl font-thin text-red-600"
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
 
                 <p className="mt-3 text-sm leading-6 text-gray-600">
                   Used by Pathway to create your calendar
@@ -1037,6 +1052,10 @@ export default function Example() {
         </div>
       </div>
     );
+    else if(tutor.isLoading)
+    {
+      return <LoaderIcon style={{width: '100px', height: '100px', marginTop: '5rem', marginLeft: '5rem'}} />
+    }
   else {
     return (
       <button

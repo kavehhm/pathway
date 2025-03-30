@@ -103,7 +103,7 @@ export default function Example() {
   const [searchQuery, setSearchQuery] = useState<string>("");
 
   return (
-    <div className="bg-white">
+    <div className="bg-white mt-16">
       <div>
         {/* Mobile filter dialog */}
         <Transition.Root show={mobileFiltersOpen} as={Fragment}>

@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { api } from "~/utils/api";
 import {
   CurrencyDollarIcon,
@@ -12,11 +12,15 @@ import Link from "next/link";
 import { FaEdit } from "react-icons/fa";
 import { useUser } from "@clerk/nextjs";
 import Cal from "@calcom/embed-react";
-
+import { getCalApi } from "@calcom/embed-react";
+import emailjs from "@emailjs/browser";
 
 const User = () => {
   const router = useRouter();
   const user = useUser();
+  const [firstName, setFirstName] = useState("");
+  const [email, setEmail] = useState("");
+
   const username = router.query.username;
   const person = api.post.getTutor.useQuery(user.user?.id ?? "");
 
@@ -39,13 +43,79 @@ const User = () => {
     });
   }
 
-  function classNames(...classes: string[]) {
-    return classes.filter(Boolean).join(" ");
-  }
+  useEffect(() => {
+    setFirstName(tutor.data?.firstName ?? "");
+    setEmail(tutor.data?.email ?? "");
+  }, [tutor.isFetchedAfterMount]);
+
+  useEffect(() => {
+    async function setupCalListener() {
+      const cal = await getCalApi();
+      cal("on", {
+        action: "bookingSuccessful",
+        callback: (e) => {
+          const { data, type, namespace } = e.detail;
+
+          e.preventDefault();
+
+          console.log("Booking data:", e.detail.data);
+
+          const startDate = new Date(
+            e.detail.data.booking.startTime,
+          ).toLocaleTimeString();
+          const endDate = new Date(
+            e.detail.data.booking.endTime,
+          ).toLocaleTimeString();
+
+          const formParams = {
+            tutor_name: firstName,
+            student_name: e.detail.data.booking.attendees[0].name,
+            start_time: startDate,
+            end_time: endDate,
+            timeZone: e.detail.data.timeZone,
+            student_email: e.detail.data.booking.attendees[0].email,
+            tutor_email: email,
+            location: e.detail.data.booking.location,
+          };
+
+          console.log(formParams);
+          // To tutor
+          emailjs
+            .send("service_z8zzszl", "template_z7etjno", formParams, {
+              publicKey: "To4xMN8D9pz4wwmq8",
+            })
+            .then(
+              (result) => {
+                console.log("We have received your message!");
+                // form.current.reset();
+              },
+              (error) => {
+                console.log(error);
+              },
+            );
+            // To student
+            emailjs
+            .send("service_z8zzszl", "template_gvkyabt", formParams, {
+              publicKey: "To4xMN8D9pz4wwmq8",
+            })
+            .then(
+              (result) => {
+                console.log("We have received your message!");
+                // form.current.reset();
+              },
+              (error) => {
+                console.log(error);
+              },
+            );
+        },
+      });
+    }
+    setupCalListener();
+  }, []);
 
   return (
     <div className="bg-white">
-      <div className="pb-24 pt-6 sm:pb-0 ">
+      <div className="mt-24 pb-24 pt-6 sm:pb-0 ">
         {/* <nav aria-label="Breadcrumb" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <ol role="list" className="flex items-center space-x-4">
             {product.breadcrumbs.map((breadcrumb) => (
@@ -77,9 +147,13 @@ const User = () => {
                   alt={tutor.data?.firstName}
                   className={"hidden w-48 rounded-full sm:block lg:hidden"}
                 />
-                <h1 className="text-xl flex gap-3 items-center font-medium text-gray-900">
+                <h1 className="flex items-center gap-3 text-xl font-medium text-gray-900">
                   {tutor.data?.firstName} {tutor.data?.lastName}{" "}
-                  {(person && person.data?.username == username) && <Link className="cursor-pointer" href={"/tutor-onboarding"}><FaEdit className="hover:text-indigo-600 " /></Link>}
+                  {person && person.data?.username == username && (
+                    <Link className="cursor-pointer" href={"/tutor-onboarding"}>
+                      <FaEdit className="hover:text-indigo-600 " />
+                    </Link>
+                  )}
                 </h1>
                 <p className="text-xl font-medium text-gray-900">
                   ${tutor.data?.hourlyRate} / hour
@@ -128,7 +202,7 @@ const User = () => {
                   src={tutor.data?.imageSrc}
                   alt={tutor.data?.firstName}
                   className={
-                    " hidden rounded-lg lg:col-span-2 lg:row-span-2 aspect-[2/2] object-cover w-full  lg:block lg:w-auto"
+                    " hidden aspect-[2/2] w-full rounded-lg object-cover lg:col-span-2 lg:row-span-2  lg:block lg:w-auto"
                   }
                 />
                 <img
@@ -223,48 +297,36 @@ const User = () => {
 
               {/* Product details */}
               <div className="flex justify-between ">
-              <div className="mt-5">
-                <h2 className="text-sm font-medium text-gray-900">
-                  School: 
-                </h2>
-                <div
-                  className="prose prose-sm mt-4 whitespace-pre-line text-gray-500"
+                <div className="mt-5">
+                  <h2 className="text-sm font-medium text-gray-900">School:</h2>
+                  <div
+                    className="prose prose-sm mt-4 whitespace-pre-line text-gray-500"
 
-                  // dangerouslySetInnerHTML={{ __html: product.description }}
-                >
-                  {tutor.data?.school}
+                    // dangerouslySetInnerHTML={{ __html: product.description }}
+                  >
+                    {tutor.data?.school}
+                  </div>
                 </div>
+                <div className="mt-5">
+                  <h2 className="text-sm font-medium text-gray-900">Major:</h2>
+                  <div
+                    className="prose prose-sm mt-4 whitespace-pre-line text-gray-500"
 
-
-              </div>
-              <div className="mt-5">
-                <h2 className="text-sm font-medium text-gray-900">
-                  Major: 
-                </h2>
-                <div
-                  className="prose prose-sm mt-4 whitespace-pre-line text-gray-500"
-
-                  // dangerouslySetInnerHTML={{ __html: product.description }}
-                >
-                  {tutor.data?.major}
+                    // dangerouslySetInnerHTML={{ __html: product.description }}
+                  >
+                    {tutor.data?.major}
+                  </div>
                 </div>
+                <div className="mt-5">
+                  <h2 className="text-sm font-medium text-gray-900">GPA:</h2>
+                  <div
+                    className="prose prose-sm mt-4 whitespace-pre-line text-gray-500"
 
-
-              </div>
-              <div className="mt-5">
-                <h2 className="text-sm font-medium text-gray-900">
-                  GPA: 
-                </h2>
-                <div
-                  className="prose prose-sm mt-4 whitespace-pre-line text-gray-500"
-
-                  // dangerouslySetInnerHTML={{ __html: product.description }}
-                >
-                  {tutor.data?.gpa}
+                    // dangerouslySetInnerHTML={{ __html: product.description }}
+                  >
+                    {tutor.data?.gpa}
+                  </div>
                 </div>
-
-
-              </div>
               </div>
               <div className="mt-5">
                 <h2 className="text-sm font-medium text-gray-900">
@@ -333,10 +395,11 @@ const User = () => {
         </div>
       </div>
 
-     {tutor.data?.calendlyLink &&
-      <div id="bookappointment" className=" py-12 ">
-        <Cal  calLink={tutor.data?.calendlyLink ?? "/pathwaytutors/15min"} />
-      </div>}
+      {tutor.data?.calendlyLink && (
+        <div id="bookappointment" className=" py-12 ">
+          <Cal calLink={tutor.data?.calendlyLink ?? "/pathwaytutors/15min"} />
+        </div>
+      )}
     </div>
   );
 };
