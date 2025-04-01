@@ -61,20 +61,27 @@ const User = () => {
           console.log("Booking data:", e.detail.data);
 
           const startDate = new Date(
+             // @ts-expect-error comment
             e.detail.data.booking.startTime,
           ).toLocaleTimeString();
           const endDate = new Date(
+             // @ts-expect-error comment
             e.detail.data.booking.endTime,
           ).toLocaleTimeString();
 
+           
           const formParams = {
             tutor_name: firstName,
+             // @ts-expect-error comment
             student_name: e.detail.data.booking.attendees[0].name,
             start_time: startDate,
             end_time: endDate,
+             // @ts-expect-error comment
             timeZone: e.detail.data.timeZone,
+             // @ts-expect-error comment
             student_email: e.detail.data.booking.attendees[0].email,
             tutor_email: email,
+            // @ts-expect-error comment
             location: e.detail.data.booking.location,
           };
 
