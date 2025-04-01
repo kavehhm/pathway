@@ -100,6 +100,7 @@ const User = () => {
                 console.log(error);
               },
             );
+            
             // To student
             emailjs
             .send("service_z8zzszl", "template_gvkyabt", formParams, {
