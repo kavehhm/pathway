@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { api } from "~/utils/api";
 import Hero from "~/components/Hero";
+import NewNav from "~/components/NewNav";
 
 export default function Home() {
 
@@ -18,6 +19,7 @@ export default function Home() {
       </Head>
       
       <div>
+        {/* <NewNav /> */}
         <Hero />
       </div>
     </>

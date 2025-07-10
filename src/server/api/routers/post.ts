@@ -69,6 +69,28 @@ export const postRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
       const { id, firstName, lastName, imageSrc, email } = input;
 
+      const apiUrl = "https://api.clerk.com/v2/event-types"
+      const apiKey = "cal_live_e6043df9d987d87182a3e6384cb2116a"
+      const payload = {
+        title: "testtutor",
+        slug: "tutornameslug",
+        lengthInMinutes: 60,
+        description: "testdescription"
+      }
+
+      // const response = await fetch(apiUrl, {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //     "Authorization": `Bearer ${apiKey}`,
+      //     'cal-api-version': '2024-06-14'
+      //   },
+      //   body: JSON.stringify(payload)
+      // })
+
+      // const data = await response.json()
+      // console.log(data)
+
       return ctx.db.user.create({
         data: {
           clerkId: id,
@@ -103,7 +125,10 @@ export const postRouter = createTRPCRouter({
         availability:  z.array(
           z.object({
             day: z.string(),
+            startTime: z.date().optional().nullable(),
+            endTime: z.date().optional().nullable(),
             available: z.boolean(),
+            visible: z.boolean(),
             timeRange: z.string().nullable(),
           })
         ),
@@ -171,8 +196,11 @@ export const postRouter = createTRPCRouter({
           data: availability.map((day) => ({
             userId: id,
             day: day.day,
+            visible: day.visible,
             available: day.available,
             timeRange: day.available ? day.timeRange : null,
+            startTime: day.startTime,
+            endTime: day.endTime
           })),
         });
 
@@ -299,4 +327,6 @@ export const postRouter = createTRPCRouter({
       },
     });
   }),
+
+  
 });

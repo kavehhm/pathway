@@ -49,14 +49,14 @@ export default function Hero() {
             <div className="mt-10 flex items-center justify-center gap-x-6">
               <Link
                 href="/tutors"
-                className="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                className="rounded-md bg-blue-600 px-5 py-2.5 text-2xl font-semibold text-white shadow-sm hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
               >
                 Get tutoring
               </Link>
              
-              <button onClick={()=>openSignUp()} className="text-sm font-semibold leading-6 text-gray-900">
+              {/* <button onClick={()=>openSignUp()} className="text-sm font-semibold leading-6 text-gray-900">
                 Become a tutor <span aria-hidden="true">→</span>
-              </button>
+              </button> */}
             </div>
           </div>
         </div>
