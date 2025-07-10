@@ -19,6 +19,8 @@
     "@headlessui/react": "^2.2.0",
     "@heroicons/react": "^2.0.18",
     "@prisma/client": "^5.1.1",
+    "@stripe/react-stripe-js": "^3.7.0",
+    "@stripe/stripe-js": "^7.4.0",
     "@t3-oss/env-nextjs": "^0.7.0",
     "@tanstack/react-query": "^4.32.6",
     "@trpc/client": "^10.37.1",
@@ -39,6 +41,7 @@
     "react-dom": "18.2.0",
     "react-hot-toast": "^2.4.1",
     "react-icons": "^5.0.1",
+    "stripe": "^18.3.0",
     "superjson": "^1.13.1",
     "svix": "^1.15.0",
     "zod": "^3.22.4"

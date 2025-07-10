@@ -1,6 +1,12 @@
 import { z } from "zod";
+import Stripe from "stripe";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
+
+// Initialize Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
+  apiVersion: "2025-06-30.basil",
+});
 
 export const postRouter = createTRPCRouter({
   getAllConsoleTutors: publicProcedure.query(({ ctx }) => {
@@ -122,6 +128,7 @@ export const postRouter = createTRPCRouter({
         subjects: z.string().array().optional(),
         hourlyRate: z.number().optional(),
         meetingLink: z.string().optional(),
+        timezone: z.string().optional(),
         availability:  z.array(
           z.object({
             day: z.string(),
@@ -153,6 +160,7 @@ export const postRouter = createTRPCRouter({
         subjects,
         hourlyRate,
         meetingLink,
+        timezone,
         availability
       } = input;
 
@@ -234,6 +242,7 @@ export const postRouter = createTRPCRouter({
           subjects,
           hourlyRate,
           meetingLink,
+          timezone,
           availability: {
             connect: availabilities
           }
@@ -315,7 +324,8 @@ export const postRouter = createTRPCRouter({
         username: input,
       },
       include: {
-        availability: true
+        availability: true,
+        bookings: true
       }
     });
   }),
@@ -331,35 +341,225 @@ export const postRouter = createTRPCRouter({
     });
   }),
 
+  createPaymentIntent: publicProcedure
+    .input(
+      z.object({
+        tutorId: z.string(),
+        date: z.string(),
+        time: z.string(),
+        amount: z.number(), // amount in cents
+        studentName: z.string(),
+        studentEmail: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tutorId, date, time, amount, studentName, studentEmail } = input;
+
+      try {
+        // Get tutor's Stripe Connect account
+        const tutor = await ctx.db.user.findUnique({
+          where: { clerkId: tutorId },
+          select: { stripeAccountId: true, stripeAccountStatus: true }
+        });
+
+        if (!tutor?.stripeAccountId) {
+          throw new Error('Tutor has not set up their payment account');
+        }
+
+        if (tutor.stripeAccountStatus !== 'active') {
+          throw new Error('Tutor payment account is not active');
+        }
+
+        // Calculate platform fee (20% of the total amount)
+        const platformFee = Math.round(amount * 0.20);
+        const tutorAmount = amount - platformFee;
+
+        console.log(`Payment breakdown: Total: $${amount/100}, Platform fee: $${platformFee/100}, Tutor receives: $${tutorAmount/100}`);
+
+        // Create a PaymentIntent with Stripe Connect
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount,
+          currency: "usd",
+          application_fee_amount: platformFee, // Platform fee
+          transfer_data: {
+            destination: tutor.stripeAccountId, // Transfer to tutor's account
+          },
+          metadata: {
+            tutorId,
+            date,
+            time,
+            studentName,
+            studentEmail,
+            platformFee: platformFee.toString(),
+            tutorAmount: tutorAmount.toString(),
+          },
+        });
+
+        return {
+          clientSecret: paymentIntent.client_secret,
+        };
+      } catch (error) {
+        console.error('Error creating payment intent:', error);
+        throw new Error('Failed to create payment intent');
+      }
+    }),
+
+  createStripeConnectAccount: publicProcedure
+    .input(
+      z.object({
+        tutorId: z.string(),
+        email: z.string(),
+        firstName: z.string(),
+        lastName: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tutorId, email, firstName, lastName } = input;
+
+      try {
+        // Create a Stripe Connect account
+        const account = await stripe.accounts.create({
+          type: 'express',
+          country: 'US',
+          email: email,
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+          business_type: 'individual',
+          individual: {
+            first_name: firstName,
+            last_name: lastName,
+            email: email,
+          },
+        });
+
+        // Update the tutor's record with the Stripe account ID
+        await ctx.db.user.update({
+          where: { clerkId: tutorId },
+          data: {
+            stripeAccountId: account.id,
+            stripeAccountStatus: account.charges_enabled ? 'active' : 'pending',
+          },
+        });
+
+        // Create an account link for onboarding
+        // In test/development mode, we can use localhost URLs
+        const baseUrl = (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test')
+          ? 'http://localhost:3000' 
+          : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000');
+          
+        const accountLink = await stripe.accountLinks.create({
+          account: account.id,
+          refresh_url: `${baseUrl}/tutor-onboarding?refresh=true`,
+          return_url: `${baseUrl}/tutor-onboarding?success=true`,
+          type: 'account_onboarding',
+        });
+
+        return {
+          accountId: account.id,
+          accountLink: accountLink.url,
+          status: account.charges_enabled ? 'active' : 'pending',
+        };
+      } catch (error) {
+        console.error('Error creating Stripe Connect account:', error);
+        throw new Error('Failed to create payment account');
+      }
+    }),
+
+  getStripeAccountStatus: publicProcedure
+    .input(z.string())
+    .query(async ({ input, ctx }) => {
+      const tutorId = input;
+
+      try {
+        const tutor = await ctx.db.user.findUnique({
+          where: { clerkId: tutorId },
+          select: { stripeAccountId: true, stripeAccountStatus: true }
+        });
+
+        if (!tutor?.stripeAccountId) {
+          return { status: 'not_setup' };
+        }
+
+        // Get the latest status from Stripe
+        const account = await stripe.accounts.retrieve(tutor.stripeAccountId);
+        
+        // Update the status in our database
+        await ctx.db.user.update({
+          where: { clerkId: tutorId },
+          data: {
+            stripeAccountStatus: account.charges_enabled ? 'active' : 'pending',
+          },
+        });
+
+        return {
+          status: account.charges_enabled ? 'active' : 'pending',
+          accountId: account.id,
+        };
+      } catch (error) {
+        console.error('Error checking Stripe account status:', error);
+        return { status: 'error' };
+      }
+    }),
+
   bookSession: publicProcedure
     .input(
       z.object({
         tutorId: z.string(),
         date: z.string(),
         time: z.string(),
+        paymentIntentId: z.string(),
+        studentName: z.string(),
+        studentEmail: z.string(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { tutorId, date, time } = input;
+      const { tutorId, date, time, paymentIntentId, studentName, studentEmail } = input;
 
-      // Here you would typically create a booking record in the database
-      // For now, we'll just return a success response
-      // You can extend this to create a Booking model in your Prisma schema
-      
       console.log(`Booking session for tutor ${tutorId} on ${date} at ${time}`);
       
-      // TODO: Add booking logic here
-      // Example: Create a booking record in the database
-      // await ctx.db.booking.create({
-      //   data: {
-      //     tutorId,
-      //     date: new Date(date),
-      //     time,
-      //     status: 'confirmed'
-      //   }
-      // });
+      try {
+        // Verify the payment was successful
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        
+        if (paymentIntent.status !== 'succeeded') {
+          throw new Error('Payment not completed');
+        }
 
-      return { success: true, message: 'Session booked successfully' };
+        // Create a booking record in the database
+        const booking = await ctx.db.booking.create({
+          data: {
+            tutorId,
+            date: new Date(date),
+            time,
+            status: 'confirmed'
+          }
+        });
+
+        console.log('Booking created:', booking);
+
+        // Get tutor information for email
+        const tutor = await ctx.db.user.findUnique({
+          where: { clerkId: tutorId },
+          select: { firstName: true, lastName: true, email: true, meetingLink: true, timezone: true }
+        });
+
+        return { 
+          success: true, 
+          message: 'Session booked successfully', 
+          bookingId: booking.id,
+          tutorInfo: tutor ? {
+            tutorName: `${tutor.firstName} ${tutor.lastName}`,
+            tutorEmail: tutor.email,
+            meetingLink: tutor.meetingLink,
+            timezone: tutor.timezone
+          } : null
+        };
+      } catch (error) {
+        console.error('Error creating booking:', error);
+        throw new Error('Failed to create booking');
+      }
     }),
 
   

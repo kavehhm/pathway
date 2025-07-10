@@ -411,7 +411,10 @@ const User = () => {
           <Cal calLink={tutor.data?.calendlyLink ?? "/pathwaytutors/15min"} />
         </div>
       )} */}
-      <ManualCal userId={username as string} />
+      <div id="bookappointment" className="py-12">
+
+        <ManualCal userId={username as string} />
+      </div>
       
     </div>
   );

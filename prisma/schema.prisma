@@ -52,6 +52,26 @@ model User {
   subjects       String[]
   hourlyRate     Int      @default(0)
   meetingLink    String?  
+  timezone       String    @default("PST")
+  stripeAccountId String?  // Stripe Connect account ID
+  stripeAccountStatus String? // pending, active, restricted, etc.
+
 
   availability Availability[]
+  bookings     Booking[]     @relation("TutorBookings")
+}
+
+model Booking {
+  id          String   @id @default(uuid())
+  tutorId     String   // clerkId of the tutor
+  date        DateTime
+  time        String
+  status      String   @default("confirmed") // confirmed, cancelled, completed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  tutor       User     @relation("TutorBookings", fields: [tutorId], references: [clerkId])
+
+  @@index([tutorId])
+  @@index([date])
 }

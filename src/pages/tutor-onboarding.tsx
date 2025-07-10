@@ -26,6 +26,8 @@ import { AiOutlineExclamationCircle } from "react-icons/ai";
 import { TimePicker } from "antd";
 import { MdOutlineCancel } from "react-icons/md";
 import { CiCirclePlus } from "react-icons/ci";
+import { US_TIMEZONES } from "~/utils/timezones";
+import StripeConnectSetup from "~/components/StripeConnectSetup";
 
 const BIO_LENGTH = 250;
 
@@ -64,6 +66,7 @@ export default function Example() {
   const [otherSchoolName, setOtherSchoolName] = useState("");
   const [otherMajor, setOtherMajor] = useState("");
   const [meetingLink, setMeetingLink] = useState(tutor.data?.meetingLink);
+  const [timezone, setTimezone] = useState('PST');
 
   const [editAvailability, setEditAvailability] = useState(false);
 
@@ -187,6 +190,7 @@ export default function Example() {
     setTutorInPerson(tutor.data?.tutorInPerson);
     setSelectedSubjects(tutor.data?.subjects);
     setMeetingLink(tutor.data?.meetingLink);
+    setTimezone(tutor.data?.timezone ?? 'PST');
     if (
       tutor.data?.availability &&
       tutor.data?.availability.length > 0 &&
@@ -850,6 +854,33 @@ export default function Example() {
                   Only needed if you plan on having online sessions
                 </p>
               </div>
+
+              <div className="col-span-full">
+                <label
+                  htmlFor="timezone"
+                  className="block text-sm font-medium leading-6 text-gray-900"
+                >
+                  Timezone
+                </label>
+                <div className="mt-2">
+                  <select
+                    id="timezone"
+                    name="timezone"
+                    className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                  >
+                    {US_TIMEZONES.map((tz) => (
+                      <option key={tz.value} value={tz.value}>
+                        {tz.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-gray-600">
+                  Your timezone will be used to display your availability to students
+                </p>
+              </div>
             </div>
           </div>
 
@@ -874,6 +905,20 @@ export default function Example() {
                 <span className="font-bold text-red-700">Not approved</span>
               )}
             </p>
+
+            {/* Stripe Connect Setup Section */}
+            <div className="mt-10 border-t border-gray-900/10 pt-10">
+              <h2 className="text-base font-semibold leading-7 text-gray-900">
+                Payment Setup
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-gray-600">
+                Setup your payment account to receive payments from students. You will receive 80% of each session payment.
+              </p>
+              
+              <div className="mt-6">
+                <StripeConnectSetup />
+              </div>
+            </div>
 
             {/* <div className="mt-10 space-y-10">
             <fieldset>
@@ -1031,6 +1076,7 @@ export default function Example() {
                 lastName: user.user?.lastName ?? "None",
                 subjects: seletedSubjects,
                 meetingLink: meetingLink ?? undefined,
+                timezone,
                 availability,
               });
             }}
