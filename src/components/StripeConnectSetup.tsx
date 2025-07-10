@@ -32,6 +32,11 @@ const StripeConnectSetup: React.FC<StripeConnectSetupProps> = ({ onSuccess }) =>
     },
   });
 
+  // Function to refresh tutor data
+  const refreshTutorData = () => {
+    tutor.refetch();
+  };
+
   const handleSetup = () => {
     if (!user) {
       toast.error('Please log in to setup your payment account');
@@ -139,6 +144,12 @@ const StripeConnectSetup: React.FC<StripeConnectSetupProps> = ({ onSuccess }) =>
               className="w-full bg-gray-600 text-white py-3 px-4 rounded-md font-medium hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
               {isLoading ? 'Setting up...' : 'Redo Setup'}
+            </button>
+            <button
+              onClick={refreshTutorData}
+              className="w-full bg-green-600 text-white py-3 px-4 rounded-md font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors"
+            >
+              Refresh Status
             </button>
           </div>
           <div className="mt-4 text-sm text-gray-500">

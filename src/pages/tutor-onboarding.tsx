@@ -200,6 +200,23 @@ export default function Example() {
     }
   }, [tutor.isFetchedAfterMount, tutor.data]);
 
+  // Handle Stripe return and refresh account status
+  useEffect(() => {
+    const { success, refresh } = router.query;
+    
+    if (success === 'true' || refresh === 'true') {
+      // Refresh the tutor data to get updated Stripe account status
+      tutor.refetch();
+      
+      if (success === 'true') {
+        toast.success('Payment account setup completed successfully!');
+      }
+      
+      // Clean up the URL parameters
+      router.replace('/tutor-onboarding', undefined, { shallow: true });
+    }
+  }, [router.query, tutor, router]);
+
   const handleAvailabilityChange = (
     index: number,
     value: string,
