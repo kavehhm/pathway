@@ -552,7 +552,7 @@ export const postRouter = createTRPCRouter({
         };
       } catch (error) {
         console.error('Error checking Stripe account status:', error);
-        return { status: 'error', error: error.message };
+        return { status: 'error', error: "Something went wrong" };
       }
     }),
 
