@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { api } from '~/utils/api';
 import { toast } from 'react-hot-toast';
 import { useUser } from '@clerk/nextjs';
+import type { TRPCClientErrorLike } from '@trpc/react-query';
+import type { AppRouter } from '~/server/api/root';
 
 interface StripeConnectSetupProps {
   onSuccess?: () => void;
@@ -15,6 +17,35 @@ const StripeConnectSetup: React.FC<StripeConnectSetupProps> = ({ onSuccess }) =>
   const tutor = api.post.getTutor.useQuery(user?.id ?? "", {
     enabled: !!user?.id,
   });
+
+  // Add getStripeAccountStatus tRPC query (manual trigger)
+  const {
+    data: stripeStatusData,
+    isLoading: isStatusLoading,
+    error: statusErrorObj,
+    refetch: refetchStripeStatus,
+  } = api.post.getStripeAccountStatus.useQuery(user?.id ?? '', {
+    enabled: !!user?.id && !!tutor.data?.stripeAccountId,
+    refetchOnWindowFocus: false,
+  });
+  const statusError = statusErrorObj ? statusErrorObj.message : null;
+
+  // On mount, check Stripe status if user has a Stripe account
+  useEffect(() => {
+    if (user?.id && tutor.data?.stripeAccountId) {
+      refetchStripeStatus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, tutor.data?.stripeAccountId]);
+
+  // Function to refresh tutor data and Stripe status
+  const refreshTutorDataAndStatus = () => {
+    if (user?.id && tutor.data?.stripeAccountId) {
+      refetchStripeStatus().then(() => tutor.refetch());
+    } else {
+      tutor.refetch();
+    }
+  };
 
   const createAccount = api.post.createStripeConnectAccount.useMutation({
     onSuccess: (data) => {
@@ -131,6 +162,15 @@ const StripeConnectSetup: React.FC<StripeConnectSetupProps> = ({ onSuccess }) =>
           <p className="text-gray-600 mb-6">
             Your payment account is being verified. You can continue the verification process or restart the setup.
           </p>
+          {isStatusLoading && (
+            <div className="flex items-center justify-center mb-2">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
+              <span className="text-blue-600">Checking Stripe status...</span>
+            </div>
+          )}
+          {statusError && (
+            <div className="text-red-600 text-sm mb-2">{statusError}</div>
+          )}
           <div className="space-y-3">
             <button
               onClick={handleContinueOnboarding}
@@ -146,10 +186,11 @@ const StripeConnectSetup: React.FC<StripeConnectSetupProps> = ({ onSuccess }) =>
               {isLoading ? 'Setting up...' : 'Redo Setup'}
             </button>
             <button
-              onClick={refreshTutorData}
+              onClick={refreshTutorDataAndStatus}
               className="w-full bg-green-600 text-white py-3 px-4 rounded-md font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors"
+              disabled={isStatusLoading}
             >
-              Refresh Status
+              {isStatusLoading ? 'Refreshing...' : 'Refresh Status'}
             </button>
           </div>
           <div className="mt-4 text-sm text-gray-500">

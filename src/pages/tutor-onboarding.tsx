@@ -235,13 +235,13 @@ export default function Example() {
       // Only update the specific item at the index
       const item = newAvailability[index];
       if (item) {
-        if (field === "available") {
-          item.available = value === "YES";
-        } else if (field === "timeRange") {
-          item.timeRange = value;
-          item.startTime = startDate;
-          item.endTime = endDate;
-        }
+          if (field === "available") {
+            item.available = value === "YES";
+          } else if (field === "timeRange") {
+            item.timeRange = value;
+            item.startTime = startDate;
+            item.endTime = endDate;
+          }
       }
   
       return newAvailability;
