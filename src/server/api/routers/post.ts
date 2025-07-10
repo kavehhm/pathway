@@ -314,6 +314,9 @@ export const postRouter = createTRPCRouter({
       where: {
         username: input,
       },
+      include: {
+        availability: true
+      }
     });
   }),
 
@@ -327,6 +330,37 @@ export const postRouter = createTRPCRouter({
       },
     });
   }),
+
+  bookSession: publicProcedure
+    .input(
+      z.object({
+        tutorId: z.string(),
+        date: z.string(),
+        time: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tutorId, date, time } = input;
+
+      // Here you would typically create a booking record in the database
+      // For now, we'll just return a success response
+      // You can extend this to create a Booking model in your Prisma schema
+      
+      console.log(`Booking session for tutor ${tutorId} on ${date} at ${time}`);
+      
+      // TODO: Add booking logic here
+      // Example: Create a booking record in the database
+      // await ctx.db.booking.create({
+      //   data: {
+      //     tutorId,
+      //     date: new Date(date),
+      //     time,
+      //     status: 'confirmed'
+      //   }
+      // });
+
+      return { success: true, message: 'Session booked successfully' };
+    }),
 
   
 });

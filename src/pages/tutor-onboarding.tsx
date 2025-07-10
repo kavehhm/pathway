@@ -202,38 +202,26 @@ export default function Example() {
     field: "available" | "timeRange",
     startDate: Date | undefined,
     endDate: Date | undefined,
-    dayToUpdate: string | undefined // New parameter
+    dayToUpdate: string | undefined
   ) => {
     setAvailability((prevAvailability) => {
       if (!prevAvailability || index < 0 || index >= prevAvailability.length) {
-        // If previous availability is not defined or index is out of bounds, return as is
         return prevAvailability;
       }
   
       const newAvailability = [...prevAvailability];
   
-      // Update availability for all instances of the specified day
-      newAvailability.forEach((item, i) => {
-        if (dayToUpdate && item.day === dayToUpdate) {
-          // Update all instances of the specific day
-          if (field === "available") {
-            item.available = value === "YES";
-          } else if (field === "timeRange") {
-            item.timeRange = value;
-            item.startTime = startDate;
-            item.endTime = endDate;
-          }
-        } else if (i === index) {
-          // Update only the item at the index
-          if (field === "available") {
-            item.available = value === "YES";
-          } else if (field === "timeRange") {
-            item.timeRange = value;
-            item.startTime = startDate;
-            item.endTime = endDate;
-          }
+      // Only update the specific item at the index
+      const item = newAvailability[index];
+      if (item) {
+        if (field === "available") {
+          item.available = value === "YES";
+        } else if (field === "timeRange") {
+          item.timeRange = value;
+          item.startTime = startDate;
+          item.endTime = endDate;
         }
-      });
+      }
   
       return newAvailability;
     });

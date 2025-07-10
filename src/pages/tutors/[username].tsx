@@ -14,12 +14,14 @@ import { useUser } from "@clerk/nextjs";
 import Cal from "@calcom/embed-react";
 import { getCalApi } from "@calcom/embed-react";
 import emailjs from "@emailjs/browser";
+import ManualCal from "~/components/ManualCal";
 
 const User = () => {
   const router = useRouter();
   const user = useUser();
   const [firstName, setFirstName] = useState("");
   const [email, setEmail] = useState("");
+  const [userId, setUserId] = useState("");
 
   const username = router.query.username;
   const person = api.post.getTutor.useQuery(user.user?.id ?? "");
@@ -46,6 +48,7 @@ const User = () => {
   useEffect(() => {
     setFirstName(tutor.data?.firstName ?? "");
     setEmail(tutor.data?.email ?? "");
+    setUserId(tutor.data?.id ?? "");
   }, [tutor.isFetchedAfterMount]);
 
   useEffect(() => {
@@ -403,11 +406,13 @@ const User = () => {
         </div>
       </div>
 
-      {tutor.data?.calendlyLink && (
+      {/* {tutor.data?.calendlyLink && (
         <div id="bookappointment" className=" py-12 ">
           <Cal calLink={tutor.data?.calendlyLink ?? "/pathwaytutors/15min"} />
         </div>
-      )}
+      )} */}
+      <ManualCal userId={username as string} />
+      
     </div>
   );
 };
