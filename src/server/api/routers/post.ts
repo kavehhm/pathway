@@ -515,7 +515,7 @@ export const postRouter = createTRPCRouter({
       }
     }),
 
-  getStripeAccountStatus: publicProcedure
+    getStripeAccountStatus: publicProcedure
     .input(z.string())
     .query(async ({ input, ctx }) => {
       const tutorId = input;
@@ -532,22 +532,27 @@ export const postRouter = createTRPCRouter({
 
         // Get the latest status from Stripe
         const account = await stripe.accounts.retrieve(tutor.stripeAccountId);
-        
-        // Update the status in our database
+        console.log('Stripe account object:', JSON.stringify(account, null, 2));
+
+        // Only use charges_enabled to determine if active
+        const isActive = account.charges_enabled;
         await ctx.db.user.update({
           where: { clerkId: tutorId },
           data: {
-            stripeAccountStatus: account.charges_enabled ? 'active' : 'pending',
+            stripeAccountStatus: isActive ? 'active' : 'pending',
           },
         });
 
         return {
-          status: account.charges_enabled ? 'active' : 'pending',
+          status: isActive ? 'active' : 'pending',
           accountId: account.id,
+          charges_enabled: account.charges_enabled,
+          payouts_enabled: account.payouts_enabled,
+          requirements: account.requirements,
         };
       } catch (error) {
         console.error('Error checking Stripe account status:', error);
-        return { status: 'error' };
+        return { status: 'error', error: error.message };
       }
     }),
 
