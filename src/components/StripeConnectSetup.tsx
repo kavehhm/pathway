@@ -47,11 +47,30 @@ const StripeConnectSetup: React.FC<StripeConnectSetupProps> = ({ onSuccess }) =>
     });
   };
 
+  const continueOnboarding = api.post.createStripeConnectAccount.useMutation({
+    onSuccess: (data) => {
+      if (data.accountLink) {
+        // Redirect to Stripe Connect onboarding
+        window.location.href = data.accountLink;
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to continue onboarding');
+    },
+  });
+
   const handleContinueOnboarding = () => {
-    if (tutor.data?.stripeAccountId) {
-      // Get the account link to continue onboarding
-      window.location.href = `https://dashboard.stripe.com/express/${tutor.data.stripeAccountId}`;
+    if (!user) {
+      toast.error('Please log in to continue onboarding');
+      return;
     }
+
+    continueOnboarding.mutate({
+      tutorId: user.id,
+      email: user.emailAddresses[0]?.emailAddress ?? '',
+      firstName: user.firstName ?? '',
+      lastName: user.lastName ?? '',
+    });
   };
 
   // Show loading state

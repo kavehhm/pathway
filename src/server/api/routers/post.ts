@@ -417,31 +417,79 @@ export const postRouter = createTRPCRouter({
       const { tutorId, email, firstName, lastName } = input;
 
       try {
-        // Create a Stripe Connect account
-        const account = await stripe.accounts.create({
-          type: 'express',
-          country: 'US',
-          email: email,
-          capabilities: {
-            card_payments: { requested: true },
-            transfers: { requested: true },
-          },
-          business_type: 'individual',
-          individual: {
-            first_name: firstName,
-            last_name: lastName,
-            email: email,
-          },
+        // Check if tutor already has a Stripe account
+        const existingTutor = await ctx.db.user.findUnique({
+          where: { clerkId: tutorId },
+          select: { stripeAccountId: true }
         });
 
-        // Update the tutor's record with the Stripe account ID
-        await ctx.db.user.update({
-          where: { clerkId: tutorId },
-          data: {
-            stripeAccountId: account.id,
-            stripeAccountStatus: account.charges_enabled ? 'active' : 'pending',
-          },
-        });
+        let accountId: string;
+
+        if (existingTutor?.stripeAccountId) {
+          // Use existing account
+          accountId = existingTutor.stripeAccountId;
+          
+          // Verify the account still exists in Stripe
+          try {
+            await stripe.accounts.retrieve(accountId);
+          } catch (error) {
+            // Account doesn't exist in Stripe, create a new one
+            const newAccount = await stripe.accounts.create({
+              type: 'express',
+              country: 'US',
+              email: email,
+              capabilities: {
+                card_payments: { requested: true },
+                transfers: { requested: true },
+              },
+              business_type: 'individual',
+              individual: {
+                first_name: firstName,
+                last_name: lastName,
+                email: email,
+              },
+            });
+            
+            accountId = newAccount.id;
+            
+            // Update the tutor's record with the new Stripe account ID
+            await ctx.db.user.update({
+              where: { clerkId: tutorId },
+              data: {
+                stripeAccountId: accountId,
+                stripeAccountStatus: newAccount.charges_enabled ? 'active' : 'pending',
+              },
+            });
+          }
+        } else {
+          // Create a new Stripe Connect account
+          const account = await stripe.accounts.create({
+            type: 'express',
+            country: 'US',
+            email: email,
+            capabilities: {
+              card_payments: { requested: true },
+              transfers: { requested: true },
+            },
+            business_type: 'individual',
+            individual: {
+              first_name: firstName,
+              last_name: lastName,
+              email: email,
+            },
+          });
+
+          accountId = account.id;
+
+          // Update the tutor's record with the Stripe account ID
+          await ctx.db.user.update({
+            where: { clerkId: tutorId },
+            data: {
+              stripeAccountId: accountId,
+              stripeAccountStatus: account.charges_enabled ? 'active' : 'pending',
+            },
+          });
+        }
 
         // Create an account link for onboarding
         // In test/development mode, we can use localhost URLs
@@ -450,16 +498,16 @@ export const postRouter = createTRPCRouter({
           : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000');
           
         const accountLink = await stripe.accountLinks.create({
-          account: account.id,
+          account: accountId,
           refresh_url: `${baseUrl}/tutor-onboarding?refresh=true`,
           return_url: `${baseUrl}/tutor-onboarding?success=true`,
           type: 'account_onboarding',
         });
 
         return {
-          accountId: account.id,
+          accountId: accountId,
           accountLink: accountLink.url,
-          status: account.charges_enabled ? 'active' : 'pending',
+          status: 'pending', // Will be updated when they complete onboarding
         };
       } catch (error) {
         console.error('Error creating Stripe Connect account:', error);
