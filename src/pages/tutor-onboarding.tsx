@@ -226,28 +226,34 @@ export default function Example() {
     endDate: Date | undefined,
     dayToUpdate: string | undefined
   ) => {
-    setAvailability((prevAvailability) => {
-      if (!prevAvailability || index < 0 || index >= prevAvailability.length) {
-        return prevAvailability;
+    setAvailability((prev) => {
+      // clone everything
+      const next = prev.map((e) => ({ ...e }));
+  
+      if (field === "available" && dayToUpdate) {
+        const isAvail = value === "YES";
+        // flip available on all slots for that day
+        return next.map((e) =>
+          e.day === dayToUpdate ? { ...e, available: isAvail } : e
+        );
       }
   
-      const newAvailability = [...prevAvailability];
-  
-      // Only update the specific item at the index
-      const item = newAvailability[index];
-      if (item) {
-          if (field === "available") {
-            item.available = value === "YES";
-          } else if (field === "timeRange") {
-            item.timeRange = value;
-            item.startTime = startDate;
-            item.endTime = endDate;
-          }
+      if (field === "timeRange") {
+        // guard against out‑of‑bounds
+        const item = next[index];
+        if (item) {
+          item.timeRange = value;
+          item.startTime = startDate;
+          item.endTime   = endDate;
+        }
       }
   
-      return newAvailability;
+      return next;
     });
   };
+  
+
+
 
   console.log("availabilty", availability);
 
@@ -777,7 +783,7 @@ export default function Example() {
                 </div>
 
                 <div className="space-y-6">
-                  {availability.map((day, index) => (
+                  {availability.filter((day) => day.visible || day.available).map((day, index) => (
                     <div
                       key={index}
                       className={`rounded-xl border-2 transition-all duration-200 ${
