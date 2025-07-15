@@ -28,6 +28,7 @@ import { MdOutlineCancel } from "react-icons/md";
 import { CiCirclePlus } from "react-icons/ci";
 import { US_TIMEZONES } from "~/utils/timezones";
 import StripeConnectSetup from "~/components/StripeConnectSetup";
+import dayjs from 'dayjs';
 
 const BIO_LENGTH = 250;
 
@@ -259,18 +260,38 @@ export default function Example() {
 
   if (tutor.data && tutor.isFetchedAfterMount)
     return (
-      <div className="p-10 mt-16 lg:p-48">
-        <div className="space-y-12">
-          <div className="border-b border-gray-900/10 pb-12">
-            <h2 className="text-base font-semibold leading-7 text-gray-900">
-              Profile
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-gray-600">
-              This information will be displayed publicly so be careful what you
-              share.
+      <div className="min-h-screen  bg-gradient-to-br from-indigo-50 via-white to-purple-50">
+        <div className="mx-auto pt-48 max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
+          {/* Header */}
+          <div className="mb-12  text-center">
+            <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
+              Complete Your Profile
+            </h1>
+            <p className="mt-4 text-lg text-gray-600">
+              Let&apos;s get you set up to start tutoring on Pathway
             </p>
+          </div>
 
-            <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
+          <div className="space-y-16">
+            {/* Profile Section */}
+            <div className="rounded-2xl bg-white/70 backdrop-blur-sm shadow-xl border border-white/20 p-8">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100">
+                  <svg className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    Profile Information
+                  </h2>
+                  <p className="text-gray-600">
+                    This information will be displayed publicly so be careful what you share.
+                  </p>
+                </div>
+              </div>
+
+                          <div className="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
               <div className="col-span-full">
                 <label
                   htmlFor="photo"
@@ -296,7 +317,7 @@ export default function Example() {
                 <div className="mt-2">
                   <div className="flex rounded-md shadow-sm ring-1 ring-inset ring-gray-300 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600 sm:max-w-md">
                     <span className="flex select-none items-center pl-3 text-gray-500 sm:text-sm">
-                      pathwayapp.com/tutors/
+                      pathwaytutors.com/tutors/
                     </span>
                     <input
                       type="text"
@@ -409,14 +430,23 @@ export default function Example() {
             </div>
           </div>
 
-          <div className="border-b border-gray-900/10 pb-12">
-            <h2 className="text-base font-semibold leading-7 text-gray-900">
-              Personal Information
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-gray-600">
-              This is the information that you will be matched with students
-              based on
-            </p>
+            {/* Personal Information Section */}
+            <div className="rounded-2xl bg-white/70 backdrop-blur-sm shadow-xl border border-white/20 p-8">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100">
+                  <svg className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    Personal Information
+                  </h2>
+                  <p className="text-gray-600">
+                    This is the information that you will be matched with students based on
+                  </p>
+                </div>
+              </div>
 
             <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
               <div className="sm:col-span-2">
@@ -727,125 +757,134 @@ export default function Example() {
               )}
 
               <div className="col-span-full">
-                <label className="flex items-center gap-2 text-sm font-medium leading-6 text-gray-900">
-                  Availability
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+                    <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                    </svg>
+                  </div>
+                  <div>
+                    <label className="text-lg font-semibold text-gray-900">
+                      Weekly Availability
+                    </label>
+                    <p className="text-sm text-gray-600">Set your available hours for tutoring sessions</p>
+                  </div>
                   {!(
                     tutor.data?.availability &&
                     tutor.data?.availability.length > 0 &&
                     Array.isArray(tutor.data.availability)
-                  ) && <AiOutlineExclamationCircle className="text-red-600" />}
-                </label>
-                {/* <div className="mt-2">
-                  <textarea
-                    id="about"
-                    placeholder={`Monday: 3:00 P.M. - 5 P.M. & 8 P.M. - 11 P.M. \nTuesday: 10 A.M. - 3 P.M. \n...`}
-                    name="about"
-                    rows={3}
-                    className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                    value={availability || ""}
-                    onChange={(e) => setAvailability(e.target.value)}
-                  />
-                </div> */}
-                {/* AVAILABILITY FORM */}
+                  ) && <AiOutlineExclamationCircle className="text-red-600 text-xl" />}
+                </div>
 
-                <div className="space-y-4 py-6">
+                <div className="space-y-6">
                   {availability.map((day, index) => (
                     <div
                       key={index}
-                      className=" items-center gap-4"
+                      className={`rounded-xl border-2 transition-all duration-200 ${
+                        day.available 
+                          ? 'border-blue-200 bg-blue-50/50' 
+                          : 'border-gray-200 bg-gray-50/30'
+                      } ${day.visible ? 'p-6' : 'p-4 ml-8'}`}
                     >
                       {day.visible && (
-  <div className="flex items-center gap-3 mb-4">
-    <label className="font-semibold">{day.day}</label>
-    <label className="flex items-center space-x-2">
-      <input
-        type="checkbox"
-        checked={day.available}
-        onChange={(e) => {
-          // Update all instances of the day when unchecked
-          handleAvailabilityChange(
-            index,
-            e.target.checked ? "YES" : "NO",
-            "available",
-            undefined,
-            undefined,
-             day.day
-          );
-        }}
-        className="h-8 w-8 md:h-4 md:w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
-      />
-    </label>
-  </div>
-)}
-                      {day.available && (
-                        // <input
-                        //   type="text"
-                        //   placeholder="9:00 am - 5:00 pm"
-                        //   value={day.timeRange as string}
-                        //   onChange={(e) =>
-                        //     handleAvailabilityChange(
-                        //       index,
-                        //       e.target.value,
-                        //       "timeRange",
-                        //     )
-                        //   }
-                        //   className="rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                        // />
-                        <div
-                          className={`flex ${
-                            !day.visible && `col-start-3`
-                          } items-center gap-4`}
-                        >
-                          <TimePicker.RangePicker
-                            placeholder={[
-                              day.startTime?.toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }) ?? "Start Time",
-                              day.endTime?.toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }) ?? "End Time",
-                            ]}
-                            needConfirm={false}
-                            className="w-full md:w-fit "
-                            minuteStep={15}
-                            format={"h:mm a"}
-                            onCalendarChange={(dates, dateStrings, info) => {
-                              if (info.range == "end") {
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                              day.available ? 'bg-blue-100' : 'bg-gray-100'
+                            }`}>
+                              <span className={`text-sm font-semibold ${
+                                day.available ? 'text-blue-600' : 'text-gray-500'
+                              }`}>
+                                {day.day.slice(0, 3)}
+                              </span>
+                            </div>
+                            <label className="text-lg font-medium text-gray-900">{day.day}</label>
+                          </div>
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={day.available}
+                              onChange={(e) => {
                                 handleAvailabilityChange(
                                   index,
-                                  `${dateStrings[0]} - ${dateStrings[1]}`,
-                                  "timeRange",
-                                  dates[0]?.toDate(),
-                                  dates[1]?.toDate(),
+                                  e.target.checked ? "YES" : "NO",
+                                  "available",
+                                  undefined,
+                                  undefined,
                                   day.day
                                 );
-                              }
-                            }}
-                          />
+                              }}
+                              className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-600 transition-colors duration-200"
+                            />
+                            <span className="ml-2 text-sm text-gray-600">
+                              {day.available ? 'Available' : 'Unavailable'}
+                            </span>
+                          </label>
+                        </div>
+                      )}
+                      
+                      {day.available && (
+                        <div className={`flex ${!day.visible && `col-start-3`} items-center gap-4`}>
+                          <div className="flex-1 relative">
+                            <TimePicker.RangePicker
+                              placeholder={["Start Time", "End Time"]}
+                              needConfirm={false}
+                              className="w-full"
+                              minuteStep={15}
+                              format={"h:mm a"}
+                              onCalendarChange={(dates, dateStrings, info) => {
+                                if (info.range == "end") {
+                                  handleAvailabilityChange(
+                                    index,
+                                    `${dateStrings[0]} - ${dateStrings[1]}`,
+                                    "timeRange",
+                                    dates[0]?.toDate(),
+                                    dates[1]?.toDate(),
+                                    day.day
+                                  );
+                                }
+                              }}
+                              value={day.startTime && day.endTime ? [dayjs(day.startTime), dayjs(day.endTime)] : undefined}
+                              allowClear={true}
+                            />
+                          </div>
                           {day.visible ? (
-                            <CiCirclePlus
-                              onClick={() =>
-                                handleAddTimeWindow(day.day, index)
-                              }
-                              className=" cursor-pointer text-3xl font-bold text-indigo-600"
-                            />
+                            <div className="flex flex-col items-center">
+                              <button
+                                onClick={() => handleAddTimeWindow(day.day, index)}
+                                className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 hover:bg-blue-600 transition-colors duration-200 shadow-md"
+                                title="Add another time slot"
+                              >
+                                <CiCirclePlus className="text-2xl text-white" />
+                              </button>
+                              <span className="text-xs text-blue-700 mt-1">Add time slot</span>
+                            </div>
                           ) : (
-                            <MdOutlineCancel
+                            <button
                               onClick={() => handleRemoveTimeWindow(index)}
-                              className="cursor-pointer text-3xl font-thin text-red-600"
-                            />
+                              className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 hover:bg-red-200 transition-colors duration-200"
+                              title="Remove this time slot"
+                            >
+                              <MdOutlineCancel className="text-2xl text-red-600" />
+                            </button>
                           )}
                         </div>
                       )}
+                      {day.visible && <p className="text-xs text-gray-500 mt-2 ml-2">You can add multiple time slots for this day.</p>}
                     </div>
                   ))}
                 </div>
 
-                <p className="mt-3 text-sm leading-6 text-gray-600">
-                  Used by Pathway to create your calendar
-                </p>
+                <div className="mt-6 p-4 rounded-lg bg-blue-50 border border-blue-200">
+                  <div className="flex items-start gap-3">
+                    <svg className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                    </svg>
+                    <p className="text-sm text-blue-800">
+                      Used by Pathway to create your calendar and match you with students during your available hours.
+                    </p>
+                  </div>
+                </div>
               </div>
               <div className="col-span-full">
                 <label
@@ -901,27 +940,50 @@ export default function Example() {
             </div>
           </div>
 
-          <div className="border-b border-gray-900/10 pb-12">
-            <h2 className="text-base font-semibold leading-7 text-gray-900">
-              Status
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-gray-600">
-              We will update you on when your status changes with the email you
-              provided. <br></br>
-              To update the email being used, go to the name and profile icon
-              for the option to change. <br></br>
-              Any change to your school, major, or GPA will require the
-              restarting of the approval process.
-            </p>
+            {/* Status Section */}
+            <div className="rounded-2xl bg-white/70 backdrop-blur-sm shadow-xl border border-white/20 p-8">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+                  <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    Account Status
+                  </h2>
+                  <p className="text-gray-600">
+                    We will update you on when your status changes with the email you provided.
+                  </p>
+                </div>
+              </div>
 
-            <p className="mt-3">
-              Current status:{" "}
-              {approved ? (
-                <span className="font-bold text-green-700">Approved</span>
-              ) : (
-                <span className="font-bold text-red-700">Not approved</span>
-              )}
-            </p>
+              <div className="mb-8 p-6 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200">
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full ${approved ? 'bg-green-100' : 'bg-red-100'}`}>
+                    {approved ? (
+                      <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    ) : (
+                      <svg className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Current status:</p>
+                    <p className={`font-bold ${approved ? 'text-green-700' : 'text-red-700'}`}>
+                      {approved ? 'Approved' : 'Not approved'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-sm text-gray-600 space-y-2">
+                <p>• To update the email being used, go to the name and profile icon for the option to change.</p>
+                <p>• Any change to your school, major, or GPA will require the restarting of the approval process.</p>
+              </div>
 
             {/* Stripe Connect Setup Section */}
             <div className="mt-10 border-t border-gray-900/10 pt-10">
@@ -1061,18 +1123,20 @@ export default function Example() {
               </div>
             </fieldset>
           </div> */}
+            </div>
           </div>
         </div>
 
-        <div className="mt-6 flex items-center justify-end gap-x-6">
+        {/* Action Buttons */}
+        <div className="mt-12 flex items-center justify-end gap-x-6">
           <Link
             href={`/tutors/${tutor.data?.username}`}
-            className="text-sm font-semibold leading-6 text-gray-900"
+            className="rounded-lg px-6 py-3 text-sm font-semibold text-gray-700 hover:text-gray-900 transition-colors duration-200"
           >
             Cancel
           </Link>
           <button
-            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            className="rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-8 py-3 text-sm font-semibold text-white shadow-lg hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 transform hover:scale-105"
             disabled={!user.user?.id}
             onClick={() => {
               updateUser.mutate({
@@ -1098,7 +1162,7 @@ export default function Example() {
               });
             }}
           >
-            Update
+            Update Profile
           </button>
         </div>
       </div>

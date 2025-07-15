@@ -330,6 +330,14 @@ export const postRouter = createTRPCRouter({
     });
   }),
 
+  getBookingCount: publicProcedure.input(z.string()).query(({ input, ctx }) => {
+    return ctx.db.booking.count({
+      where: {
+        tutorId: input,
+      },
+    });
+  }),
+
   getAllSubjects: publicProcedure.query(({ ctx }) => {
     return ctx.db.user.findMany({
       where: {

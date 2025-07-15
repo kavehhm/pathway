@@ -27,6 +27,7 @@ const User = () => {
   const person = api.post.getTutor.useQuery(user.user?.id ?? "");
 
   const tutor = api.post.getSingleTutor.useQuery(username as string);
+  const bookingCount = api.post.getBookingCount.useQuery(tutor.data?.clerkId ?? "");
   const policies = [
     {
       name: `Online ${tutor.data?.tutorInPerson ? "& in person " : ""}Tutoring`,
@@ -125,8 +126,8 @@ const User = () => {
   }, []);
 
   return (
-    <div className="bg-white">
-      <div className="mt-24 pb-24 pt-6 sm:pb-0 ">
+    <div className="bg-white py-12">
+      <div className="mt-24 pb-24  pt-6 sm:pb-0 ">
         {/* <nav aria-label="Breadcrumb" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <ol role="list" className="flex items-center space-x-4">
             {product.breadcrumbs.map((breadcrumb) => (
@@ -207,7 +208,7 @@ const User = () => {
             <div className="mt-8  lg:col-span-5 lg:col-start-1 lg:row-span-3 lg:row-start-1 lg:mt-0">
               <h2 className="sr-only">Images</h2>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 lg:gap-8">
+              <div className="relative grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 lg:gap-8">
                 <img
                   key={tutor.data?.username}
                   src={tutor.data?.imageSrc}
@@ -222,6 +223,20 @@ const User = () => {
                   alt={tutor.data?.firstName}
                   className={"  w-full rounded-lg sm:hidden"}
                 />
+                
+                {/* Booking count badge overlapping the image */}
+                <div className="absolute bottom-4 left-4 z-10">
+                  <div className="inline-flex items-center gap-2 rounded-lg bg-white/90 backdrop-blur-sm px-3 py-2 shadow-lg">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100">
+                      <span className="text-xs font-semibold text-indigo-600">
+                        {bookingCount.data ?? 0}
+                      </span>
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">
+                      bookings
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 

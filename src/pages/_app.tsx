@@ -18,10 +18,11 @@ const MyApp: AppType = ({ Component, pageProps }) => {
         <meta name="description" content="Get the best tutoring help, when you need it, where you need it." />
         <link rel="icon" href="/logo.png" />
       </Head>
+      <div className="">
+
       <Navbar />
-      <div className="py-12">
-      <Component {...pageProps} />
       </div>
+      <Component {...pageProps} />
     </ClerkProvider>
   );
 };
