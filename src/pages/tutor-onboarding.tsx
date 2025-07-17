@@ -142,9 +142,9 @@ export default function Example() {
       available: false,
       timeRange: '',
     };
-    const old = availability[oldIndex] || defaultSlot;
+    const old = availability[oldIndex] ?? defaultSlot;
     const newEntry: Availability = {
-      day: old.day || day || '',
+      day: old.day ?? day ?? '',
       visible: false,
       startTime: old.startTime === null ? undefined : old.startTime,
       endTime: old.endTime === null ? undefined : old.endTime,
@@ -185,7 +185,7 @@ export default function Example() {
         setSubSlotCache((cache) => {
           const day = removed.day || '';
           if (!day) return cache;
-          const filtered = (cache[day] || []).filter(
+          const filtered = (cache[day] ?? []).filter(
             (slot) => (slot.startTime === undefined ? undefined : slot.startTime) !== (removed.startTime === undefined ? undefined : removed.startTime) || (slot.endTime === undefined ? undefined : slot.endTime) !== (removed.endTime === undefined ? undefined : removed.endTime)
           );
           return { ...cache, [day]: filtered };
@@ -258,7 +258,7 @@ export default function Example() {
   ) => {
     setAvailability((prev) => {
       // clone everything
-      let next = prev.map((e) => ({ ...e }));
+      const next = prev.map((e) => ({ ...e }));
 
       if (field === "available" && dayToUpdate) {
         const isAvail = value === "YES";
