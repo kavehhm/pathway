@@ -5,3 +5,17 @@
 html {
     scroll-behavior: smooth;
 }
+
+@keyframes fadeinup {
+  0% {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fadeinup {
+  animation: fadeinup 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}

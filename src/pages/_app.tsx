@@ -18,11 +18,18 @@ const MyApp: AppType = ({ Component, pageProps }) => {
         <meta name="description" content="Get the best tutoring help, when you need it, where you need it." />
         <link rel="icon" href="/logo.png" />
       </Head>
-      <div className="">
-
-      <Navbar />
+      <div className="min-h-screen">
+        <Navbar />
+        {/* Page load animation wrapper */}
+        <div
+          className="animate-fadeinup transition-all duration-700 ease-out"
+          style={{
+            animation: 'fadeinup 0.8s cubic-bezier(0.22, 1, 0.36, 1)'
+          }}
+        >
+          <Component {...pageProps} />
+        </div>
       </div>
-      <Component {...pageProps} />
     </ClerkProvider>
   );
 };

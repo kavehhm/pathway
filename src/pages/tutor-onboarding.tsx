@@ -130,12 +130,26 @@ export default function Example() {
     },
   ]);
 
+  // Add a cache to store sub time slots for each day when toggled unavailable
+  const [subSlotCache, setSubSlotCache] = useState<Record<string, Availability[]>>({});
+
   const handleAddTimeWindow = (day: string, oldIndex: number) => {
-    const newEntry = {
-      ...availability[oldIndex],
+    const defaultSlot: Availability = {
+      day: day,
       visible: false,
-      startTime: null,
-      endTime: null,
+      startTime: undefined,
+      endTime: undefined,
+      available: false,
+      timeRange: '',
+    };
+    const old = availability[oldIndex] || defaultSlot;
+    const newEntry: Availability = {
+      day: old.day || day || '',
+      visible: false,
+      startTime: old.startTime === null ? undefined : old.startTime,
+      endTime: old.endTime === null ? undefined : old.endTime,
+      available: typeof old.available === 'boolean' ? old.available : false,
+      timeRange: typeof old.timeRange === 'string' ? old.timeRange : '',
     };
 
     // Find the index of the last occurrence of the specified day
@@ -144,8 +158,8 @@ export default function Example() {
       .filter((index) => index !== -1)
       .pop();
 
-    let updatedAvailability = [];
-    if (lastIndex) {
+    let updatedAvailability: Availability[] = [];
+    if (typeof lastIndex === 'number' && lastIndex >= 0) {
       updatedAvailability = [
         ...availability.slice(0, lastIndex + 1),
         newEntry,
@@ -159,15 +173,26 @@ export default function Example() {
       ];
     }
 
-    console.log("updated availability", updatedAvailability);
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
     setAvailability(updatedAvailability);
   };
 
   const handleRemoveTimeWindow = (index: number) => {
-    const updatedAvailability = availability.filter((_, i) => i !== index);
-    setAvailability(updatedAvailability);
+    setAvailability((prev) => {
+      const removed = prev[index];
+      const updated = prev.filter((_, i) => i !== index);
+      // If this is a sub slot, also remove it from the cache
+      if (removed && !removed.visible) {
+        setSubSlotCache((cache) => {
+          const day = removed.day || '';
+          if (!day) return cache;
+          const filtered = (cache[day] || []).filter(
+            (slot) => (slot.startTime === undefined ? undefined : slot.startTime) !== (removed.startTime === undefined ? undefined : removed.startTime) || (slot.endTime === undefined ? undefined : slot.endTime) !== (removed.endTime === undefined ? undefined : removed.endTime)
+          );
+          return { ...cache, [day]: filtered };
+        });
+      }
+      return updated;
+    });
   };
 
   // const subjects = api.post.getAllSubjects.useQuery();
@@ -191,7 +216,12 @@ export default function Example() {
     setTutorInPerson(tutor.data?.tutorInPerson);
     setSelectedSubjects(tutor.data?.subjects);
     setMeetingLink(tutor.data?.meetingLink);
-    setTimezone(tutor.data?.timezone ?? 'PST');
+    // Only set timezone if it exists on tutor.data
+    if ('timezone' in (tutor.data ?? {})) {
+      setTimezone((tutor.data as any)?.timezone ?? 'PST');
+    } else {
+      setTimezone('PST');
+    }
     if (
       tutor.data?.availability &&
       tutor.data?.availability.length > 0 &&
@@ -228,26 +258,51 @@ export default function Example() {
   ) => {
     setAvailability((prev) => {
       // clone everything
-      const next = prev.map((e) => ({ ...e }));
-  
+      let next = prev.map((e) => ({ ...e }));
+
       if (field === "available" && dayToUpdate) {
         const isAvail = value === "YES";
-        // flip available on all slots for that day
-        return next.map((e) =>
+        // Find all sub slots for this day (not visible)
+        const subSlots = next.filter((e) => e.day === dayToUpdate && !e.visible);
+        // Remove all sub slots for this day
+        let filtered = next.filter((e) => e.day !== dayToUpdate || e.visible);
+        filtered = filtered.map((e) =>
           e.day === dayToUpdate ? { ...e, available: isAvail } : e
         );
+        // If toggling to unavailable, cache the sub slots
+        if (!isAvail && subSlots.length > 0) {
+          // Only cache sub slots that are currently present (not deleted)
+          setSubSlotCache((cache) => ({ ...cache, [dayToUpdate]: subSlots }));
+        }
+        // If toggling to available and we have cached sub slots, restore them immediately after the main day
+        if (isAvail && subSlotCache[dayToUpdate]) {
+          const mainIndex = filtered.findIndex(e => e.day === dayToUpdate && e.visible);
+          if (mainIndex !== -1) {
+            filtered = [
+              ...filtered.slice(0, mainIndex + 1),
+              ...subSlotCache[dayToUpdate]!,
+              ...filtered.slice(mainIndex + 1)
+            ];
+          } else {
+            filtered = [
+              ...filtered,
+              ...subSlotCache[dayToUpdate]!
+            ];
+          }
+        }
+        return filtered;
       }
-  
+
       if (field === "timeRange") {
         // guard against out‑of‑bounds
         const item = next[index];
         if (item) {
           item.timeRange = value;
-          item.startTime = startDate;
-          item.endTime   = endDate;
+          item.startTime = startDate === null ? undefined : startDate;
+          item.endTime   = endDate === null ? undefined : endDate;
         }
       }
-  
+
       return next;
     });
   };
@@ -783,16 +838,19 @@ export default function Example() {
                 </div>
 
                 <div className="space-y-6">
-                  {availability.filter((day) => day.visible || day.available).map((day, index) => (
-                    <div
-                      key={index}
-                      className={`rounded-xl border-2 transition-all duration-200 ${
-                        day.available 
-                          ? 'border-blue-200 bg-blue-50/50' 
-                          : 'border-gray-200 bg-gray-50/30'
-                      } ${day.visible ? 'p-6' : 'p-4 ml-8'}`}
-                    >
-                      {day.visible && (
+                  {availability.map((day, index) => {
+                    // Only show sub time slots (invisible/secondary) if the day is available
+                    if (!day.visible && !day.available) return null;
+                    if (!day.visible && !availability.find(d => d.day === day.day && d.visible && d.available)) return null;
+                    return (
+                      <div
+                        key={index}
+                        className={`rounded-xl border-2 transition-all duration-200 ${
+                          day.available 
+                            ? 'border-blue-200 bg-blue-50/50' 
+                            : 'border-gray-200 bg-gray-50/30'
+                        } ${day.visible ? 'p-6' : 'p-4 ml-8'}`}
+                      >
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3">
                             <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
@@ -806,79 +864,95 @@ export default function Example() {
                             </div>
                             <label className="text-lg font-medium text-gray-900">{day.day}</label>
                           </div>
-                          <label className="flex items-center">
-                            <input
-                              type="checkbox"
-                              checked={day.available}
-                              onChange={(e) => {
-                                handleAvailabilityChange(
-                                  index,
-                                  e.target.checked ? "YES" : "NO",
-                                  "available",
-                                  undefined,
-                                  undefined,
-                                  day.day
-                                );
-                              }}
-                              className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-600 transition-colors duration-200"
-                            />
-                            <span className="ml-2 text-sm text-gray-600">
-                              {day.available ? 'Available' : 'Unavailable'}
-                            </span>
-                          </label>
-                        </div>
-                      )}
-                      
-                      {day.available && (
-                        <div className={`flex ${!day.visible && `col-start-3`} items-center gap-4`}>
-                          <div className="flex-1 relative">
-                            <TimePicker.RangePicker
-                              placeholder={["Start Time", "End Time"]}
-                              needConfirm={false}
-                              className="w-full"
-                              minuteStep={15}
-                              format={"h:mm a"}
-                              onCalendarChange={(dates, dateStrings, info) => {
-                                if (info.range == "end") {
+                          {day.visible && (
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={day.available}
+                                onChange={(e) => {
                                   handleAvailabilityChange(
                                     index,
-                                    `${dateStrings[0]} - ${dateStrings[1]}`,
-                                    "timeRange",
-                                    dates[0]?.toDate(),
-                                    dates[1]?.toDate(),
+                                    e.target.checked ? "YES" : "NO",
+                                    "available",
+                                    undefined,
+                                    undefined,
                                     day.day
                                   );
-                                }
-                              }}
-                              value={day.startTime && day.endTime ? [dayjs(day.startTime), dayjs(day.endTime)] : undefined}
-                              allowClear={true}
-                            />
-                          </div>
-                          {day.visible ? (
-                            <div className="flex flex-col items-center">
-                              <button
-                                onClick={() => handleAddTimeWindow(day.day, index)}
-                                className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 hover:bg-blue-600 transition-colors duration-200 shadow-md"
-                                title="Add another time slot"
-                              >
-                                <CiCirclePlus className="text-2xl text-white" />
-                              </button>
-                              <span className="text-xs text-blue-700 mt-1">Add time slot</span>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => handleRemoveTimeWindow(index)}
-                              className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 hover:bg-red-200 transition-colors duration-200"
-                              title="Remove this time slot"
-                            >
-                              <MdOutlineCancel className="text-2xl text-red-600" />
-                            </button>
+                                }}
+                                className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-600 transition-colors duration-200"
+                              />
+                              <span className="ml-2 text-sm text-gray-600">
+                                {day.available ? 'Available' : 'Unavailable'}
+                              </span>
+                            </label>
                           )}
                         </div>
-                      )}
-                      {day.visible && <p className="text-xs text-gray-500 mt-2 ml-2">You can add multiple time slots for this day.</p>}
-                    </div>
-                  ))}
+                        {day.available && (
+                          <div className={`flex ${!day.visible && `col-start-3`} items-center gap-4`}>
+                            <div className="flex-1 relative">
+                              <TimePicker.RangePicker
+                                placeholder={["Start Time", "End Time"]}
+                                needConfirm={false}
+                                className="w-full"
+                                minuteStep={15}
+                                format={"h:mm a"}
+                                onCalendarChange={(dates, dateStrings) => {
+                                  // unpack what the user picked (might be only start, only end, or both)
+                                  const [pickedStart, pickedEnd] = dates;
+                                  const [strStart, strEnd] = dateStrings;
+
+                                  // decide what the new times should be
+                                  const newStart = pickedStart?.toDate()   ?? day.startTime;
+                                  const newEnd   = pickedEnd?.toDate()     ?? day.endTime;
+
+                                  // build a display string, falling back to the old one if unchanged
+                                  const displayStart = strStart || (day.startTime ? dayjs(day.startTime).format("h:mm a") : "");
+                                  const displayEnd   = strEnd   || (day.endTime   ? dayjs(day.endTime).format("h:mm a")   : "");
+
+                                  const safeStart = newStart === null ? undefined : newStart;
+                                  const safeEnd = newEnd === null ? undefined : newEnd;
+                                  handleAvailabilityChange(
+                                    index,
+                                    `${displayStart} - ${displayEnd}`,
+                                    "timeRange",
+                                    safeStart,
+                                    safeEnd,
+                                    day.day
+                                  );
+                                }}
+                                value={[
+                                  day.startTime ? dayjs(day.startTime) : null,
+                                  day.endTime   ? dayjs(day.endTime)   : null
+                                ]}
+                                allowClear={true}
+                              />
+                            </div>
+                            {day.visible ? (
+                              <div className="flex flex-col items-center">
+                                <button
+                                  onClick={() => handleAddTimeWindow(day.day, index)}
+                                  className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 hover:bg-blue-600 transition-colors duration-200 shadow-md"
+                                  title="Add another time slot"
+                                >
+                                  <CiCirclePlus className="text-2xl text-white" />
+                                </button>
+                                <span className="text-xs text-blue-700 mt-1">Add time slot</span>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleRemoveTimeWindow(index)}
+                                className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 hover:bg-red-200 transition-colors duration-200"
+                                title="Remove this time slot"
+                              >
+                                <MdOutlineCancel className="text-2xl text-red-600" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {day.visible && <p className="text-xs text-gray-500 mt-2 ml-2">You can add multiple time slots for this day.</p>}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <div className="mt-6 p-4 rounded-lg bg-blue-50 border border-blue-200">
@@ -1173,26 +1247,10 @@ export default function Example() {
         </div>
       </div>
     );
-    else if(tutor.isLoading)
-    {
-      return <LoaderIcon style={{width: '100px', height: '100px', marginTop: '5rem', marginLeft: '5rem'}} />
-    }
-  else {
-    return (
-      <button
-        className=" m-24 flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-8 py-3 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-        onClick={() => {
-          createTutor.mutate({
-            id: user.user!.id,
-            firstName: user.user!.firstName ?? "None",
-            lastName: user.user!.lastName ?? "None",
-            imageSrc: user.user!.imageUrl ?? "",
-            email: user.user!.primaryEmailAddress?.emailAddress ?? "None",
-          });
-        }}
-      >
-        Create your user profile
-      </button>
-    );
+  else if(tutor.isLoading)
+  {
+    return <LoaderIcon style={{width: '100px', height: '100px', marginTop: '5rem', marginLeft: '5rem'}} />
   }
+  // Remove the 'create your user profile' button for signed-in users
+  return null;
 }
