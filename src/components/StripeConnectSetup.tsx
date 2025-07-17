@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { useUser } from '@clerk/nextjs';
 import type { TRPCClientErrorLike } from '@trpc/react-query';
 import type { AppRouter } from '~/server/api/root';
+import Link from 'next/link';
 
 interface StripeConnectSetupProps {
   onSuccess?: () => void;
@@ -138,7 +139,15 @@ const StripeConnectSetup: React.FC<StripeConnectSetupProps> = ({ onSuccess }) =>
           <p className="text-gray-600 mb-6">
             Your payment account is active and ready to receive payments from students.
           </p>
-          <div className="text-sm text-gray-500">
+          <Link
+            href={`https://connect.stripe.com/app/express#${tutor.data?.stripeAccountId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full inline-block bg-blue-600 text-white py-3 px-4 rounded-md font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors mb-6"
+          >
+            Access Payment Portal
+          </Link>
+          <div className="text-sm text-gray-500 ">
             <p>Platform fee: 20%</p>
             <p>You receive: 80% of each session</p>
           </div>

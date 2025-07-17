@@ -38,7 +38,7 @@ const User = () => {
     },
   ];
 
-  if (tutor.data?.approved) {
+  if (tutor.data?.stripeAccountStatus == "active") {
     policies.unshift({
       name: "Approved",
       icon: CheckCircleIcon,

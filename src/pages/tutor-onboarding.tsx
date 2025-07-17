@@ -321,7 +321,7 @@ export default function Example() {
 
   if (tutor.data && tutor.isFetchedAfterMount)
     return (
-      <div className="min-h-screen  bg-gradient-to-br from-indigo-50 via-white to-purple-50">
+      <div className="min-h-screen p-8 bg-gradient-to-br from-indigo-50 via-white to-purple-50">
         <div className="mx-auto pt-48 max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="mb-12  text-center">
@@ -1040,8 +1040,8 @@ export default function Example() {
 
               <div className="mb-8 p-6 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200">
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-8 w-8 items-center justify-center rounded-full ${approved ? 'bg-green-100' : 'bg-red-100'}`}>
-                    {approved ? (
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full ${tutor.data.stripeAccountStatus == "active" ? 'bg-green-100' : 'bg-red-100'}`}>
+                    {tutor.data.stripeAccountStatus == "active" ? (
                       <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
@@ -1053,8 +1053,8 @@ export default function Example() {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Current status:</p>
-                    <p className={`font-bold ${approved ? 'text-green-700' : 'text-red-700'}`}>
-                      {approved ? 'Approved' : 'Not approved'}
+                    <p className={`font-bold ${tutor.data.stripeAccountStatus == "active" ? 'text-green-700' : 'text-red-700'}`}>
+                      {tutor.data.stripeAccountStatus == "active" ? 'Approved' : 'Not approved'}
                     </p>
                   </div>
                 </div>
@@ -1208,7 +1208,7 @@ export default function Example() {
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-12 flex items-center justify-end gap-x-6">
+        <div className="-mt-4 flex items-center justify-center gap-x-6">
           <Link
             href={`/tutors/${tutor.data?.username}`}
             className="rounded-lg px-6 py-3 text-sm font-semibold text-gray-700 hover:text-gray-900 transition-colors duration-200"
@@ -1216,7 +1216,7 @@ export default function Example() {
             Cancel
           </Link>
           <button
-            className="rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-8 py-3 text-sm font-semibold text-white shadow-lg hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 transform hover:scale-105"
+            className="rounded-lg bg-gradient-to-r from-indigo-500 to-indigo-600 px-8 py-3 text-sm font-semibold text-white shadow-lg hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 transform hover:scale-105"
             disabled={!user.user?.id}
             onClick={() => {
               updateUser.mutate({
