@@ -45,7 +45,7 @@ export const postRouter = createTRPCRouter({
                   },
                 }
               : {},
-            { approved: true },
+            { stripeAccountStatus: 'active' },
           ],
         },
       });

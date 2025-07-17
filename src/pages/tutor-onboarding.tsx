@@ -315,7 +315,7 @@ export default function Example() {
   const updateUser = api.post.updateTutor.useMutation({
     onSuccess: async () => {
       toast.success("Profile updated");
-      await router.replace(`/tutors/${tutor.data?.username}`);
+      await router.replace(`/tutors/${username}`);
     },
   });
 
