@@ -312,12 +312,85 @@ export default function Example() {
 
   console.log("availabilty", availability);
 
+  // Main updateUser mutation for the button (with redirect)
   const updateUser = api.post.updateTutor.useMutation({
     onSuccess: async () => {
       toast.success("Profile updated");
       await router.replace(`/tutors/${username}`);
     },
   });
+
+  // Separate mutation for auto-sync (no redirect)
+  const updateUserProfileFields = api.post.updateTutor.useMutation({
+    onSuccess: () => {
+      toast.success("Profile updated!");
+      tutor.refetch();
+    },
+  });
+
+  // --- AUTO-SYNC CLERK PROFILE CHANGES TO DATABASE ---
+  useEffect(() => {
+    if (!user.user || !tutor.data) return;
+
+    const clerkFirstName = user.user.firstName ?? "";
+    const clerkLastName = user.user.lastName ?? "";
+    const clerkImageUrl = user.user.imageUrl ?? "";
+
+    const dbFirstName = tutor.data.firstName ?? "";
+    const dbLastName = tutor.data.lastName ?? "";
+    const dbImageUrl = tutor.data.imageSrc ?? "";
+
+    // Only update if any field is different
+    if (
+      clerkFirstName !== dbFirstName ||
+      clerkLastName !== dbLastName ||
+      clerkImageUrl !== dbImageUrl
+    ) {
+      updateUserProfileFields.mutate({
+        id: user.user.id,
+        firstName: clerkFirstName,
+        lastName: clerkLastName,
+        imageSrc: clerkImageUrl,
+        // Only update these fields, leave others as is
+        bio: tutor.data.bio,
+        username: tutor.data.username,
+        school: tutor.data.school,
+        major: tutor.data.major,
+        description: tutor.data.description,
+        gpa: tutor.data.gpa,
+        hourlyRate: tutor.data.hourlyRate,
+        country: tutor.data.country,
+        state: tutor.data.state,
+        zipCode: tutor.data.zipCode,
+        tutorInPerson: tutor.data.tutorInPerson,
+        subjects: tutor.data.subjects,
+        meetingLink: tutor.data.meetingLink ?? undefined,
+        timezone: tutor.data.timezone,
+        availability: tutor.data.availability,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.user?.firstName, user.user?.lastName, user.user?.imageUrl, tutor.data]);
+
+  // Automatically create user profile on first sign-in
+  useEffect(() => {
+    if (
+      user.user &&
+      !tutor.isLoading &&
+      !tutor.data &&
+      !createTutor.isLoading &&
+      !createTutor.isSuccess
+    ) {
+      createTutor.mutate({
+        id: user.user.id,
+        imageSrc: user.user.imageUrl ?? '',
+        firstName: user.user.firstName ?? '',
+        lastName: user.user.lastName ?? '',
+        email: user.user.primaryEmailAddress?.emailAddress ?? '',
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.user, tutor.data, tutor.isLoading]);
 
   if (tutor.data && tutor.isFetchedAfterMount)
     return (
@@ -1033,7 +1106,7 @@ export default function Example() {
                     Account Status
                   </h2>
                   <p className="text-gray-600">
-                    We will update you on when your status changes with the email you provided.
+                    Stripe takes 5-20 minutes to verify new profiles. Check back in then.
                   </p>
                 </div>
               </div>

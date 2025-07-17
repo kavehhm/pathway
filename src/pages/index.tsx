@@ -2,6 +2,8 @@ import Head from "next/head";
 import Link from "next/link";
 import Hero from "~/components/Hero";
 import NewNav from "~/components/NewNav";
+import { IoIosSearch } from "react-icons/io";
+
 
 const TOP_SCHOOLS = [
   { file: "/berkeley.png", alt: "UC Berkeley", name: "UC Berkeley" },
@@ -26,15 +28,15 @@ export default function Home() {
           <h1 className="text-5xl sm:text-6xl font-extrabold text-gray-900 mb-6 leading-tight">
             Unlock Your Academic Potential
           </h1>
-          <p className="text-xl sm:text-2xl text-gray-700 mb-1 max-w-2xl mx-auto">
+          <p className="text-xl sm:text-2xl text-gray-700 mb-6 max-w-2xl mx-auto">
             Connect with top college tutors, get help in any subject, and achieve your goals. Pathway makes finding and booking expert tutors easy, fast, and affordable.
           </p>
-        </section>
-
-        {/* Find a Tutor Button below Hero Section */}
         <div className="flex justify-center mb-1">
           <Link href="/tutors" className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-lg text-lg font-semibold shadow transition">Find a Tutor</Link>
         </div>
+        </section>
+
+        {/* Find a Tutor Button below Hero Section */}
 
         {/* Top Schools Logos */}
         <section className="max-w-5xl mx-auto py-10 px-4">
@@ -58,7 +60,8 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             <div className="bg-white rounded-xl shadow-lg p-8 flex flex-col items-center">
               <div className="bg-indigo-100 p-4 rounded-full mb-4">
-                <svg className="h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              <IoIosSearch  className="h-8 w-8 text-indigo-600"/>
+
               </div>
               <h3 className="text-xl font-semibold mb-2">1. Search</h3>
               <p className="text-gray-600 text-center">Browse top-rated tutors by subject, school, or expertise. Find the perfect match for your needs.</p>
