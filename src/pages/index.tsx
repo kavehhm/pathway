@@ -12,6 +12,24 @@ const TOP_SCHOOLS = [
   { file: "/northwestern.png", alt: "Northwestern", name: "Northwestern" },
 ];
 
+const REVIEWS = [
+  {
+    name: "Sarah M.",
+    school: "UC Berkeley Student",
+    text: "My tutor from UCLA helped me understand calculus in just two sessions. The platform is so easy to use and the quality of tutors is amazing!",
+  },
+  {
+    name: "Michael T.",
+    school: "UC Irvine Student",
+    text: "I was struggling with organic chemistry until I found my tutor on Pathway. They broke down complex concepts so clearly. My grade went from a C to an A!",
+  },
+  {
+    name: "Emily R.",
+    school: "Northeastern University",
+    text: "The free first session feature is incredible! I got to try out tutoring without any commitment. Now I'm a regular and my GPA has improved significantly.",
+  },
+];
+
 export default function Home() {
   return (
     <>
@@ -91,62 +109,26 @@ export default function Home() {
         <section className="max-w-5xl mx-auto py-16 px-4">
           <h2 className="text-3xl font-bold text-center text-indigo-800 mb-10">What Students Say</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <div className="flex items-center mb-4">
-                <div className="flex text-yellow-400">
-                  {[...Array(5)].map((_, i) => (
-                    <svg key={i} className="h-5 w-5 fill-current" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                  ))}
+            {REVIEWS.map((review, idx) => (
+              <div key={idx} className="bg-white rounded-xl shadow-lg p-6">
+                <div className="flex items-center mb-4">
+                  <div className="flex text-yellow-400">
+                    {[...Array(5)].map((_, i) => (
+                      <svg key={i} className="h-5 w-5 fill-current" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-gray-700 mb-4 italic">
+                  {`"${review.text}"`}
+                </p>
+                <div className="text-sm text-gray-600">
+                  <p className="font-semibold">{review.name}</p>
+                  <p>{review.school}</p>
                 </div>
               </div>
-              <p className="text-gray-700 mb-4 italic">
-                "My tutor from UCLA helped me understand calculus in just two sessions. The platform is so easy to use and the quality of tutors is amazing!"
-              </p>
-              <div className="text-sm text-gray-600">
-                <p className="font-semibold">Sarah M.</p>
-                <p>UC Berkeley Student</p>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <div className="flex items-center mb-4">
-                <div className="flex text-yellow-400">
-                  {[...Array(5)].map((_, i) => (
-                    <svg key={i} className="h-5 w-5 fill-current" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                  ))}
-                </div>
-              </div>
-              <p className="text-gray-700 mb-4 italic">
-                "I was struggling with organic chemistry until I found my tutor on Pathway. They broke down complex concepts so clearly. My grade went from a C to an A!"
-              </p>
-              <div className="text-sm text-gray-600">
-                <p className="font-semibold">Michael T.</p>
-                <p>UC Irvine Student</p>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <div className="flex items-center mb-4">
-                <div className="flex text-yellow-400">
-                  {[...Array(5)].map((_, i) => (
-                    <svg key={i} className="h-5 w-5 fill-current" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                  ))}
-                </div>
-              </div>
-              <p className="text-gray-700 mb-4 italic">
-                "The free first session feature is incredible! I got to try out tutoring without any commitment. Now I'm a regular and my GPA has improved significantly."
-              </p>
-              <div className="text-sm text-gray-600">
-                <p className="font-semibold">Emily R.</p>
-                <p>Northeastern University</p>
-              </div>
-            </div>
+            ))}
           </div>
         </section>
 
