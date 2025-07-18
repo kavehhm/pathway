@@ -96,7 +96,7 @@ const Navbar = () => {
             <CustomUserMenu />
           ) : (
             <div className="flex gap-12">
-             <button onClick={()=>openSignIn()} className="text-lg bg-blue-600 whitespace-nowrap py-3 px-4 text-white rounded-2xl hover:underline font-semibold leading-6 ">
+             <button onClick={()=>openSignIn({afterSignUpUrl: '/', afterSignInUrl: '/'})} className="text-lg bg-blue-600 whitespace-nowrap py-3 px-4 text-white rounded-2xl hover:underline font-semibold leading-6 ">
                 Log in
               </button>
             <button
