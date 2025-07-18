@@ -100,7 +100,7 @@ const Navbar = () => {
                 Log in
               </button>
             <button
-              onClick={() => openSignUp()}
+              onClick={() => openSignUp({afterSignUpUrl: '/', afterSignInUrl: '/'})}
               className=" font-semibold whitespace-nowrap hover:underline leading-6 text-gray-900 text-lg"
             >
               Become a tutor <span aria-hidden="true">&rarr;</span>
