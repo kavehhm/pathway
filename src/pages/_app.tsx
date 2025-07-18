@@ -16,7 +16,7 @@ const MyApp: AppType = ({ Component, pageProps }) => {
       <Head>
         <title>Pathway</title>
         <meta name="description" content="Get the best tutoring help, when you need it, where you need it." />
-        <link rel="icon" href="/logo.png" />
+        <link rel="icon" href="/ourlogowhite.png" />
       </Head>
       <div className="min-h-screen">
         <Navbar />

@@ -257,7 +257,7 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
         status: "confirmed",
         free : true,
       }, {
-        onSuccess: async (result) => {
+        onSuccess: (result) => {
           toast.success('First session is free! Your booking is confirmed.');
           
           // Send confirmation emails
@@ -285,24 +285,22 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
             console.log('Sending emails for free session with params:', formParams);
 
             // Send email to tutor
-            try {
-              await emailjs.send("service_z8zzszl", "template_z7etjno", formParams, {
-                publicKey: "To4xMN8D9pz4wwmq8",
-              });
+            emailjs.send("service_z8zzszl", "template_z7etjno", formParams, {
+              publicKey: "To4xMN8D9pz4wwmq8",
+            }).then(() => {
               console.log('Email sent to tutor successfully');
-            } catch (error) {
+            }).catch((error) => {
               console.error('Error sending email to tutor:', error);
-            }
+            });
 
             // Send email to student
-            try {
-              await emailjs.send("service_z8zzszl", "template_gvkyabt", formParams, {
-                publicKey: "To4xMN8D9pz4wwmq8",
-              });
+            emailjs.send("service_z8zzszl", "template_gvkyabt", formParams, {
+              publicKey: "To4xMN8D9pz4wwmq8",
+            }).then(() => {
               console.log('Email sent to student successfully');
-            } catch (error) {
+            }).catch((error) => {
               console.error('Error sending email to student:', error);
-            }
+            });
           }
           
           handlePaymentSuccess(result.id);

@@ -18,7 +18,7 @@ export default function Home() {
       <Head>
         <title>Pathway | College Tutoring, Simplified</title>
         <meta name="description" content="Get the best college tutoring help, when you need it, where you need it. Find top tutors, book sessions, and succeed in your courses." />
-        <link rel="icon" href="/logo.png" />
+        <link rel="icon" href="/ourlogowhite.png" />
       </Head>
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 pt-32">
         {/* Removed duplicate Navigation */}
@@ -41,7 +41,7 @@ export default function Home() {
         {/* Top Schools Logos */}
         <section className="max-w-5xl mx-auto py-10 px-4">
           <h3 className="text-xl font-semibold text-center text-gray-700 mb-6">Our tutors come from top universities:</h3>
-          <div className="flex flex-wrap justify-center items-center gap-8">
+          <div className="flex md:flex-wrap flex-col justify-center items-center gap-8">
             {TOP_SCHOOLS.map((school) => (
               <img
                 key={school.name}

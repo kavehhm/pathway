@@ -43,7 +43,7 @@ const User = () => {
   if (tutor.data?.firstSessionFree ) {
     policies.unshift({
       name: "First Session Free",
-      // @ts-ignore
+      // @ts-expect-error - Icon import type issue
       icon: TbFreeRights, 
       description: "This tutor allows your first session to be free",
     });
