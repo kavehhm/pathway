@@ -17,6 +17,7 @@ import AOS from "aos";
 import { useEffect, useState } from "react";
 import { useClerk, UserButton, useSession, useUser } from "@clerk/nextjs";
 import { api } from "~/utils/api";
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
 
 export default function NewNav() {
@@ -60,6 +61,36 @@ export default function NewNav() {
       current: url.includes("pricing"),
     },
   ];
+
+  function CustomUserMenu() {
+    const { isLoaded, user } = useUser();
+    const { signOut, openUserProfile } = useClerk();
+    const router = useRouter();
+    if (!isLoaded || !user) return null;
+    return (
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button className="rounded-full border border-gray-200 bg-white p-1">
+            <Image src={user.imageUrl} width={32} height={32} alt="User" className="rounded-full" />
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content className="mt-2 w-48 rounded-xl border border-gray-200 bg-white px-4 py-3 text-black drop-shadow-2xl">
+            <DropdownMenu.Item asChild>
+              <Link href="/tutor-onboarding" className="block w-full px-2 py-2 rounded hover:bg-gray-100">View Profile</Link>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item asChild>
+              <button onClick={() => openUserProfile()} className="block w-full text-left px-2 py-2 rounded hover:bg-gray-100">Manage Account</button>
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator className="my-2 h-px bg-gray-200" />
+            <DropdownMenu.Item asChild>
+              <button onClick={() => signOut(() => router.push('/'))} className="block w-full text-left px-2 py-2 rounded hover:bg-gray-100">Sign Out</button>
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+    );
+  }
   return (
     <Disclosure data-aos="fade-down" as="nav" className="bg-white shadow py-2 rounded-2xl">
       <div className="mx-auto max-w-7xl px-4 md:px-6 lg:px-12">
@@ -90,11 +121,7 @@ export default function NewNav() {
               {/* Current: "border-blue-500 text-gray-900", Default: "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700" */}
 
               {session?.status === "active" ? (
-            <UserButton
-              userProfileMode="navigation"
-              userProfileUrl={tutor && "/tutor-onboarding"}
-              afterSignOutUrl="/"
-            />
+            <CustomUserMenu />
           ) : (
             <div className="flex gap-7">
              <button onClick={()=>openSignIn()} className="text-sm hover:underline font-semibold leading-6 text-gray-900">

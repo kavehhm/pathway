@@ -22,6 +22,7 @@ type searchType = {
   selectedMajors: string[];
   selectedSubjects: string[];
   selectedSchools: string[];
+  firstSessionFreeOnly: boolean;
 };
 
 export default function ProductList({
@@ -29,11 +30,13 @@ export default function ProductList({
   selectedMajors,
   selectedSchools,
   selectedSubjects,
+  firstSessionFreeOnly,
 }: searchType) {
   const tutors = api.post.getAllApprovedTutors.useQuery({
     selectedMajors,
     selectedSchools,
     selectedSubjects,
+    firstSessionFreeOnly,
   });
 
   useEffect(() => {
@@ -41,7 +44,7 @@ export default function ProductList({
       await tutors.refetch();
     };
     refetchTutor();
-  }, [selectedMajors, selectedSchools, selectedSubjects]);
+  }, [selectedMajors, selectedSchools, selectedSubjects, firstSessionFreeOnly]);
 
   const filteredTutors = tutors.data
     ? tutors.data.filter((person) => {
@@ -72,7 +75,7 @@ export default function ProductList({
                   major: person.major,
                   description: person.bio,
                   imageSrc: person.imageSrc,
-                  name: `${person.firstName} ${person.lastName}` ?? "",
+                  name: `${person.firstName} ${person.lastName}`,
                   school: person.school,
                   username: person.username,
                 }}

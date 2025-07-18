@@ -55,6 +55,12 @@ const config = {
     locales: ["en"],
     defaultLocale: "en",
   },
+  images: {
+    domains: [
+      'img.clerk.com',
+      // add other domains as needed
+    ],
+  },
 };
 
 export default config;

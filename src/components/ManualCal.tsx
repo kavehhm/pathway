@@ -5,6 +5,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import PaymentForm from './PaymentForm';
 import { getCurrentTimezone, convertTimeBetweenTimezones } from '~/utils/timezones';
+import emailjs from '@emailjs/browser';
 
 interface ManualCalProps {
   userId: string;
@@ -24,12 +25,14 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
   const [studentName, setStudentName] = useState('');
   const [studentEmail, setStudentEmail] = useState('');
   const [studentTimezone, setStudentTimezone] = useState('PST');
+  const [isFirstSession, setIsFirstSession] = useState(false);
   
   // Fetch tutor availability using tRPC
 //   const { data: tutorData, isLoading, error } = api.post.getTutor.useQuery(userId, {
 //     enabled: !!userId, // Only run query if userId is provided
 //   });
   const tutor = api.post.getSingleTutor.useQuery(userId);
+  const createBooking = api.post.createBooking.useMutation();
 
   // Debug logging for tutor data
   useEffect(() => {
@@ -245,6 +248,73 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
       });
     }
 
+    // If first session is free and user checked the box, create booking directly
+    if (tutor.data?.firstSessionFree && isFirstSession) {
+      createBooking.mutate({
+        tutorId: tutor.data.clerkId,
+        date: selectedDate.toISOString().split('T')[0] ?? '',
+        time: selectedTime,
+        status: "confirmed",
+        free : true,
+      }, {
+        onSuccess: async (result) => {
+          toast.success('First session is free! Your booking is confirmed.');
+          
+          // Send confirmation emails
+          if (tutor.data) {
+            // Calculate end time (start time + 1 hour)
+            const startTimeDate = new Date(`2000-01-01 ${selectedTime}`);
+            const endTimeDate = new Date(startTimeDate.getTime() + 60 * 60 * 1000); // Add 1 hour
+            const endTime = endTimeDate.toLocaleTimeString('en-US', { 
+              hour: 'numeric', 
+              minute: '2-digit',
+              hour12: true 
+            });
+
+            const formParams = {
+              tutor_name: `${tutor.data.firstName} ${tutor.data.lastName}`,
+              student_name: studentName,
+              start_time: selectedTime,
+              end_time: endTime,
+              timeZone: 'UTC',
+              student_email: studentEmail,
+              tutor_email: tutor.data.email,
+              location: tutor.data.meetingLink ?? 'N/A',
+            };
+
+            console.log('Sending emails for free session with params:', formParams);
+
+            // Send email to tutor
+            try {
+              await emailjs.send("service_z8zzszl", "template_z7etjno", formParams, {
+                publicKey: "To4xMN8D9pz4wwmq8",
+              });
+              console.log('Email sent to tutor successfully');
+            } catch (error) {
+              console.error('Error sending email to tutor:', error);
+            }
+
+            // Send email to student
+            try {
+              await emailjs.send("service_z8zzszl", "template_gvkyabt", formParams, {
+                publicKey: "To4xMN8D9pz4wwmq8",
+              });
+              console.log('Email sent to student successfully');
+            } catch (error) {
+              console.error('Error sending email to student:', error);
+            }
+          }
+          
+          handlePaymentSuccess(result.id);
+        },
+        onError: (error) => {
+          toast.error('Failed to create booking. Please try again.');
+          console.error('Booking creation error:', error);
+        }
+      });
+      return;
+    }
+
     setShowPayment(true);
   };
 
@@ -376,6 +446,19 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
       </div>
 
       {/* Book Now Button */}
+      {/* First Session Free Checkbox */}
+      {tutor.data?.firstSessionFree && <div className="mb-4 flex items-center">
+        <input
+          id="first-session-checkbox"
+          type="checkbox"
+          checked={isFirstSession}
+          onChange={e => setIsFirstSession(e.target.checked)}
+          className="mr-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+        <label htmlFor="first-session-checkbox" className="text-sm text-gray-700 select-none">
+          First session with this tutor?
+        </label>
+      </div>}
       <button
         onClick={handleBookNow}
         disabled={!selectedDate || !selectedTime}
@@ -421,20 +504,22 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
       )}
 
       {/* Payment Form */}
-      {showPayment && selectedDate && selectedTime && tutor.data && tutor.data.clerkId && (
-        <div className="mt-6 border-t pt-6">
-          <PaymentForm
-            tutorId={tutor.data.clerkId}
-            date={selectedDate.toISOString().split('T')[0] ?? ''}
-            time={selectedTime}
-            amount={tutor.data.hourlyRate * 100} // Convert to cents
-            studentName={studentName}
-            studentEmail={studentEmail}
-            onSuccess={handlePaymentSuccess}
-            onCancel={handlePaymentCancel}
-          />
-        </div>
-      )}
+      {showPayment && selectedDate && selectedTime && tutor.data && tutor.data.clerkId &&
+        (!tutor.data.firstSessionFree || !isFirstSession) && (
+          <div className="mt-6 border-t pt-6">
+            <PaymentForm
+              tutorId={tutor.data.clerkId}
+              userId={userId}
+              date={selectedDate.toISOString().split('T')[0] ?? ''}
+              time={selectedTime}
+              amount={tutor.data.hourlyRate * 100} // Convert to cents
+              studentName={studentName}
+              studentEmail={studentEmail}
+              onSuccess={handlePaymentSuccess}
+              onCancel={handlePaymentCancel}
+            />
+          </div>
+        )}
     </div>
   );
 };

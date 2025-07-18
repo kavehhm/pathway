@@ -216,6 +216,7 @@ export default function Example() {
     setTutorInPerson(tutor.data?.tutorInPerson);
     setSelectedSubjects(tutor.data?.subjects);
     setMeetingLink(tutor.data?.meetingLink);
+    setFirstSessionFree(!!tutor.data?.firstSessionFree);
     // Only set timezone if it exists on tutor.data
     if ('timezone' in (tutor.data ?? {})) {
       setTimezone((tutor.data as any)?.timezone ?? 'PST');
@@ -431,7 +432,7 @@ export default function Example() {
                   htmlFor="photo"
                   className="flex items-center gap-2 text-sm font-medium leading-6 text-gray-900"
                 >
-                  Photo & Name (Click update in modal and bottom of this page)
+                  Photo & Name
                 </label>
                 <div className="mt-2 flex items-center gap-x-3">
                   <UserButton />
@@ -561,6 +562,7 @@ export default function Example() {
                   once your profile is opened)
                 </p>
               </div>
+              
             </div>
           </div>
 
@@ -1312,6 +1314,7 @@ export default function Example() {
                 meetingLink: meetingLink ?? undefined,
                 timezone,
                 availability,
+                firstSessionFree,
               });
             }}
           >

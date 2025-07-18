@@ -15,6 +15,8 @@ import Cal from "@calcom/embed-react";
 import { getCalApi } from "@calcom/embed-react";
 import emailjs from "@emailjs/browser";
 import ManualCal from "~/components/ManualCal";
+import { TbFreeRights } from "react-icons/tb";
+
 
 const User = () => {
   const router = useRouter();
@@ -38,11 +40,12 @@ const User = () => {
     },
   ];
 
-  if (tutor.data?.stripeAccountStatus == "active") {
+  if (tutor.data?.firstSessionFree ) {
     policies.unshift({
-      name: "Approved",
-      icon: CheckCircleIcon,
-      description: "This tutor has been verified.",
+      name: "First Session Free",
+      // @ts-ignore
+      icon: TbFreeRights, 
+      description: "This tutor allows your first session to be free",
     });
   }
 
@@ -233,7 +236,7 @@ const User = () => {
                       </span>
                     </div>
                     <span className="text-sm font-medium text-gray-900">
-                      bookings
+                      paid booking{bookingCount.data != 1 && <span>s</span> }
                     </span>
                   </div>
                 </div>

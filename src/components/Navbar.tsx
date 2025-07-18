@@ -1,4 +1,4 @@
-import { useClerk, UserButton, useSession, useUser } from "@clerk/nextjs";
+import { useClerk, useSession, useUser } from "@clerk/nextjs";
 import { Dialog } from "@headlessui/react";
 import { Bars3Icon, XMarkIcon } from "@heroicons/react/20/solid";
 import Link from "next/link";
@@ -9,6 +9,7 @@ import { api } from "~/utils/api";
 import "aos/dist/aos.css";
 import AOS from "aos";
 import ourlogo from '../../public/ourlogo.png'
+import CustomUserMenu from './CustomUserMenu';
 
 const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -92,11 +93,7 @@ const Navbar = () => {
         </div> */}
         <div className="hidden md:flex md:flex-1 md:justify-end">
           {session?.status === "active" ? (
-            <UserButton
-              userProfileMode="navigation"
-              userProfileUrl={tutor && "/tutor-onboarding"}
-              afterSignOutUrl="/"
-            />
+            <CustomUserMenu />
           ) : (
             <div className="flex gap-12">
              <button onClick={()=>openSignIn()} className="text-lg bg-blue-600 whitespace-nowrap py-3 px-4 text-white rounded-2xl hover:underline font-semibold leading-6 ">
@@ -178,11 +175,7 @@ const Navbar = () => {
               )}
               <div className="py-6">
                 {session?.status === "active" ? (
-                  <UserButton
-                    userProfileMode="navigation"
-                    userProfileUrl={tutor && "/tutor-onboarding"}
-                    afterSignOutUrl="/"
-                  />
+                  <CustomUserMenu />
                 ) : (
                   <div className="w-full">
                   <button onClick={()=>openSignIn()} className="-mx-3 w-full text-left block w rounded-lg px-3 py-2.5 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50">

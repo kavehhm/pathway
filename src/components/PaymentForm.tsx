@@ -15,6 +15,7 @@ const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 
 interface PaymentFormProps {
   tutorId: string;
+  userId: string;
   date: string;
   time: string;
   amount: number; // amount in cents
@@ -26,6 +27,7 @@ interface PaymentFormProps {
 
 const CheckoutForm: React.FC<PaymentFormProps> = ({ 
   tutorId, 
+  userId,
   date, 
   time, 
   amount, 
@@ -40,6 +42,91 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
 
   const createPaymentIntent = api.post.createPaymentIntent.useMutation();
   const bookSession = api.post.bookSession.useMutation();
+  const createBooking = api.post.createBooking.useMutation();
+  const tutor = api.post.getSingleTutor.useQuery(userId)
+
+  const handleSuccess = async (paymentIntent?: { id: any; }) => {
+    // Book the session
+    let result;
+    let bookingId: string;
+    
+    if (paymentIntent) {
+      // Paid session - use existing bookSession mutation
+      result = await bookSession.mutateAsync({
+        tutorId,
+        date,
+        time,
+        paymentIntentId: paymentIntent.id,
+        studentName,
+        studentEmail,
+      });
+      bookingId = result.bookingId;
+    } else {
+      // Free session - create booking directly
+      result = await createBooking.mutateAsync({
+        tutorId,
+        date,
+        time,
+        status: "confirmed",
+      });
+      bookingId = result.id;
+    }
+
+    // Get tutor info for emails (since createBooking doesn't return it)
+    const tutorInfo = tutor.data ? {
+      tutorName: `${tutor.data.firstName} ${tutor.data.lastName}`,
+      tutorEmail: tutor.data.email,
+      meetingLink: tutor.data.meetingLink,
+    } : null;
+
+    // Send emails if we have tutor info
+    if (tutorInfo) {
+      // Calculate end time (start time + 1 hour)
+      const startTimeDate = new Date(`2000-01-01 ${time}`);
+      const endTimeDate = new Date(startTimeDate.getTime() + 60 * 60 * 1000); // Add 1 hour
+      const endTime = endTimeDate.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      });
+
+      const formParams = {
+        tutor_name: tutorInfo.tutorName,
+        student_name: studentName,
+        start_time: time,
+        end_time: endTime,
+        timeZone: 'UTC',
+        student_email: studentEmail,
+        tutor_email: tutorInfo.tutorEmail,
+        location: tutorInfo.meetingLink ?? 'N/A',
+      };
+
+      console.log('Sending emails with params:', formParams);
+
+      // Send email to tutor
+      try {
+        await emailjs.send("service_z8zzszl", "template_z7etjno", formParams, {
+          publicKey: "To4xMN8D9pz4wwmq8",
+        });
+        console.log('Email sent to tutor successfully');
+      } catch (error) {
+        console.error('Error sending email to tutor:', error);
+      }
+
+      // Send email to student
+      try {
+        await emailjs.send("service_z8zzszl", "template_gvkyabt", formParams, {
+          publicKey: "To4xMN8D9pz4wwmq8",
+        });
+        console.log('Email sent to student successfully');
+      } catch (error) {
+        console.error('Error sending email to student:', error);
+      }
+    }
+
+    toast.success('Session booked successfully!');
+    onSuccess(bookingId);
+  }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -51,94 +138,47 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
     setIsProcessing(true);
 
     try {
-      // Create payment intent
-      const { clientSecret } = await createPaymentIntent.mutateAsync({
-        tutorId,
-        date,
-        time,
-        amount,
-        studentName,
-        studentEmail,
-      });
+      // Check if this is a free first session
+      const isFreeSession = tutor.data?.firstSessionFree;
+      
+      if (isFreeSession) {
+        // Free session - bypass payment
+        await handleSuccess();
+      } else {
+        // Paid session - process payment
+        // Create payment intent
+        const { clientSecret } = await createPaymentIntent.mutateAsync({
+          tutorId,
+          date,
+          time,
+          amount,
+          studentName,
+          studentEmail,
+        });
 
-      if (!clientSecret) {
-        throw new Error('Failed to create payment intent');
-      }
-
-      // Confirm the payment
-      const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-        payment_method: {
-          card: elements.getElement(CardElement)!,
-        },
-      });
-
-      if (error) {
-        toast.error(error.message ?? 'Payment failed');
-        return;
-      }
-
-              if (paymentIntent?.status === 'succeeded') {
-          // Book the session
-          const result = await bookSession.mutateAsync({
-            tutorId,
-            date,
-            time,
-            paymentIntentId: paymentIntent.id,
-            studentName,
-            studentEmail,
-          });
-
-          // Send emails if booking was successful and we have tutor info
-          if (result.tutorInfo) {
-            // Calculate end time (start time + 1 hour)
-            const startTimeDate = new Date(`2000-01-01 ${time}`);
-            const endTimeDate = new Date(startTimeDate.getTime() + 60 * 60 * 1000); // Add 1 hour
-            const endTime = endTimeDate.toLocaleTimeString('en-US', { 
-              hour: 'numeric', 
-              minute: '2-digit',
-              hour12: true 
-            });
-
-            const formParams = {
-              tutor_name: result.tutorInfo.tutorName,
-              student_name: studentName,
-              start_time: time,
-              end_time: endTime,
-              timeZone: 'UTC',
-              student_email: studentEmail,
-              tutor_email: result.tutorInfo.tutorEmail,
-              location: result.tutorInfo.meetingLink ?? 'N/A',
-            };
-
-            console.log('Sending emails with params:', formParams);
-
-            // Send email to tutor
-            try {
-              await emailjs.send("service_z8zzszl", "template_z7etjno", formParams, {
-                publicKey: "To4xMN8D9pz4wwmq8",
-              });
-              console.log('Email sent to tutor successfully');
-            } catch (error) {
-              console.error('Error sending email to tutor:', error);
-            }
-
-            // Send email to student
-            try {
-              await emailjs.send("service_z8zzszl", "template_gvkyabt", formParams, {
-                publicKey: "To4xMN8D9pz4wwmq8",
-              });
-              console.log('Email sent to student successfully');
-            } catch (error) {
-              console.error('Error sending email to student:', error);
-            }
-          }
-
-          toast.success('Payment successful! Session booked.');
-          onSuccess(result.bookingId);
+        if (!clientSecret) {
+          throw new Error('Failed to create payment intent');
         }
+
+        // Confirm the payment
+        const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+          payment_method: {
+            card: elements.getElement(CardElement)!,
+          },
+        });
+
+        if (error) {
+          toast.error(error.message ?? 'Payment failed');
+          return;
+        }
+
+        if (paymentIntent?.status === 'succeeded') {
+          await handleSuccess(paymentIntent);
+        }
+      }
     } catch (error) {
-      console.error('Payment error:', error);
-      toast.error('Payment failed. Please try again.');
+      console.error('Booking error:', error);
+      toast.error('Booking failed. Please try again.');
     } finally {
       setIsProcessing(false);
     }

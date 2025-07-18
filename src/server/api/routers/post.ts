@@ -19,10 +19,11 @@ export const postRouter = createTRPCRouter({
         selectedMajors: z.string().array().optional(),
         selectedSubjects: z.string().array().optional(),
         selectedSchools: z.string().array().optional(),
+        firstSessionFreeOnly: z.boolean().optional(),
       }),
     )
     .query(({ input, ctx }) => {
-      const { selectedMajors, selectedSubjects, selectedSchools } = input;
+      const { selectedMajors, selectedSubjects, selectedSchools, firstSessionFreeOnly } = input;
 
       return ctx.db.user.findMany({
         where: {
@@ -44,6 +45,10 @@ export const postRouter = createTRPCRouter({
                     hasSome: selectedSubjects,
                   },
                 }
+              : {},
+            // Filter by first session free
+            firstSessionFreeOnly === true
+              ? { firstSessionFree: true }
               : {},
             { stripeAccountStatus: 'active' },
           ],
@@ -139,6 +144,7 @@ export const postRouter = createTRPCRouter({
             timeRange: z.string().nullable(),
           })
         ),
+        firstSessionFree: z.boolean().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -161,7 +167,8 @@ export const postRouter = createTRPCRouter({
         hourlyRate,
         meetingLink,
         timezone,
-        availability
+        availability,
+        firstSessionFree,
       } = input;
 
 
@@ -245,7 +252,8 @@ export const postRouter = createTRPCRouter({
           timezone,
           availability: {
             connect: availabilities
-          }
+          },
+          ...(firstSessionFree !== undefined ? { firstSessionFree } : {}),
         },
       });
     }),
@@ -300,7 +308,7 @@ export const postRouter = createTRPCRouter({
   getAllSchools: publicProcedure.query(({ ctx }) => {
     return ctx.db.user.findMany({
       where: {
-        approved: true,
+        stripeAccountStatus: 'active',
       },
       select: {
         school: true,
@@ -310,7 +318,7 @@ export const postRouter = createTRPCRouter({
   getAllMajors: publicProcedure.query(({ ctx }) => {
     return ctx.db.user.findMany({
       where: {
-        approved: true,
+        stripeAccountStatus: 'active',
       },
       select: {
         major: true,
@@ -334,19 +342,22 @@ export const postRouter = createTRPCRouter({
     return ctx.db.booking.count({
       where: {
         tutorId: input,
+        free: false
       },
     });
   }),
 
   getAllSubjects: publicProcedure.query(({ ctx }) => {
-    return ctx.db.user.findMany({
+    const result = ctx.db.user.findMany({
       where: {
-        approved: true,
+        stripeAccountStatus: 'active',
       },
       select: {
         subjects: true,
       },
     });
+    console.log("API getAllSubjects result:", result);
+    return result;
   }),
 
   createPaymentIntent: publicProcedure
@@ -410,6 +421,33 @@ export const postRouter = createTRPCRouter({
         console.error('Error creating payment intent:', error);
         throw new Error('Failed to create payment intent');
       }
+    }),
+
+  createBooking: publicProcedure
+    .input(
+      z.object({
+        tutorId: z.string(), // clerkId of the tutor
+        date: z.string(),
+        time: z.string(),
+        status: z.string().optional().default("confirmed"),
+        free: z.boolean().optional().default(false)
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tutorId, date, time, status, free } = input;
+
+      // Convert date string to DateTime
+      const bookingDate = new Date(date);
+
+      return ctx.db.booking.create({
+        data: {
+          tutorId,
+          date: bookingDate,
+          time,
+          status,
+          free
+        },
+      });
     }),
 
   createStripeConnectAccount: publicProcedure

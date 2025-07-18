@@ -99,6 +99,7 @@ export default function Example() {
 
   const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
   const [selectedMajors, setSelectedMajors] = useState<string[]>([]);
+  const [firstSessionFreeOnly, setFirstSessionFreeOnly] = useState<boolean>(false);
 
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -265,6 +266,8 @@ export default function Example() {
                                     />
                                   )}
 
+
+
                                   {/* {section.options.map((option, optionIdx) => (
                               <div
                                 key={option.value}
@@ -293,6 +296,26 @@ export default function Example() {
                         )}
                       </Disclosure>
                     ))}
+
+                    {/* First Session Free Filter - Always Visible */}
+                    <div className="border-t border-gray-200 px-4 py-6">
+                      <div className="flex items-center">
+                        <input
+                          id="first-session-free-mobile"
+                          name="first-session-free-mobile"
+                          type="checkbox"
+                          checked={firstSessionFreeOnly}
+                          onChange={(e) => setFirstSessionFreeOnly(e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <label
+                          htmlFor="first-session-free-mobile"
+                          className="ml-3 text-sm font-medium text-gray-900"
+                        >
+                          Show only tutors with free first session
+                        </label>
+                      </div>
+                    </div>
                   </form>
                 </Dialog.Panel>
               </Transition.Child>
@@ -484,6 +507,8 @@ export default function Example() {
                               />
                             )}
 
+
+
                             {/* {section.options.map((option, optionIdx) => (
                               <div
                                 key={option.value}
@@ -511,6 +536,26 @@ export default function Example() {
                     )}
                   </Disclosure>
                 ))}
+
+                {/* First Session Free Filter - Always Visible */}
+                <div className="border-b border-gray-200 py-6">
+                  <div className="flex items-center">
+                    <input
+                      id="first-session-free-desktop"
+                      name="first-session-free-desktop"
+                      type="checkbox"
+                      checked={firstSessionFreeOnly}
+                      onChange={(e) => setFirstSessionFreeOnly(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <label
+                      htmlFor="first-session-free-desktop"
+                      className="ml-3 text-sm font-medium text-gray-900"
+                    >
+                      Show only tutors with free first session
+                    </label>
+                  </div>
+                </div>
               </form>
 
               {/* Product grid */}
@@ -519,6 +564,7 @@ export default function Example() {
                   selectedMajors={selectedMajors}
                   selectedSchools={selectedSchools}
                   selectedSubjects={selectedSubjects}
+                  firstSessionFreeOnly={firstSessionFreeOnly}
                   searchQuery={searchQuery}
                 />
               </div>

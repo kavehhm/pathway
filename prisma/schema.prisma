@@ -55,7 +55,7 @@ model User {
   timezone       String    @default("PST")
   stripeAccountId String?  // Stripe Connect account ID
   stripeAccountStatus String? // pending, active, restricted, etc.
-
+  firstSessionFree Boolean @default(false)
 
   availability Availability[]
   bookings     Booking[]     @relation("TutorBookings")
@@ -69,6 +69,7 @@ model Booking {
   status      String   @default("confirmed") // confirmed, cancelled, completed
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  free        Boolean @default(false)
   
   tutor       User     @relation("TutorBookings", fields: [tutorId], references: [clerkId])
 
