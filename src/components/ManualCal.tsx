@@ -262,30 +262,63 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
           
           // Send confirmation emails
           if (tutor.data) {
-            // Calculate end time (start time + 1 hour)
-            const startTimeDate = new Date(`2000-01-01 ${selectedTime}`);
-            const endTimeDate = new Date(startTimeDate.getTime() + 60 * 60 * 1000); // Add 1 hour
-            const endTime = endTimeDate.toLocaleTimeString('en-US', { 
+            // Calculate end time (start time + 1 hour) for student timezone
+            const studentStartTimeDate = new Date(`2000-01-01 ${selectedTime}`);
+            const studentEndTimeDate = new Date(studentStartTimeDate.getTime() + 60 * 60 * 1000); // Add 1 hour
+            const studentEndTime = studentEndTimeDate.toLocaleTimeString('en-US', { 
               hour: 'numeric', 
               minute: '2-digit',
               hour12: true 
             });
 
-            const formParams = {
+            // Convert times to tutor's timezone
+            const tutorStartTime = convertTimeBetweenTimezones(
+              selectedTime,
+              studentTimezone,
+              tutor.data.timezone ?? 'PST'
+            );
+            const tutorStartTimeDate = new Date(`2000-01-01 ${tutorStartTime}`);
+            const tutorEndTimeDate = new Date(tutorStartTimeDate.getTime() + 60 * 60 * 1000); // Add 1 hour
+            const tutorEndTime = tutorEndTimeDate.toLocaleTimeString('en-US', { 
+              hour: 'numeric', 
+              minute: '2-digit',
+              hour12: true 
+            });
+
+            const dateStr = selectedDate.toISOString().split('T')[0];
+
+            // Email params for tutor (in tutor's timezone)
+            const tutorEmailParams = {
               tutor_name: `${tutor.data.firstName} ${tutor.data.lastName}`,
               student_name: studentName,
-              start_time: selectedTime,
-              end_time: endTime,
-              timeZone: 'UTC',
+              date: dateStr,
+              start_time: tutorStartTime,
+              end_time: tutorEndTime,
+              timeZone: tutor.data.timezone ?? 'PST',
               student_email: studentEmail,
               tutor_email: tutor.data.email,
               location: tutor.data.meetingLink ?? 'N/A',
             };
 
-            console.log('Sending emails for free session with params:', formParams);
+            // Email params for student (in student's timezone)
+            const studentEmailParams = {
+              tutor_name: `${tutor.data.firstName} ${tutor.data.lastName}`,
+              student_name: studentName,
+              date: dateStr,
+              start_time: selectedTime,
+              end_time: studentEndTime,
+              timeZone: studentTimezone,
+              student_email: studentEmail,
+              tutor_email: tutor.data.email,
+              location: tutor.data.meetingLink ?? 'N/A',
+            };
+
+            console.log('Sending emails for free session with params:');
+            console.log('Tutor email params:', tutorEmailParams);
+            console.log('Student email params:', studentEmailParams);
 
             // Send email to tutor
-            emailjs.send("service_z8zzszl", "template_z7etjno", formParams, {
+            emailjs.send("service_z8zzszl", "template_z7etjno", tutorEmailParams, {
               publicKey: "To4xMN8D9pz4wwmq8",
             }).then(() => {
               console.log('Email sent to tutor successfully');
@@ -294,7 +327,7 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
             });
 
             // Send email to student
-            emailjs.send("service_z8zzszl", "template_gvkyabt", formParams, {
+            emailjs.send("service_z8zzszl", "template_gvkyabt", studentEmailParams, {
               publicKey: "To4xMN8D9pz4wwmq8",
             }).then(() => {
               console.log('Email sent to student successfully');

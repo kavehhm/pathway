@@ -9,6 +9,7 @@ import {
 import { api } from '~/utils/api';
 import { toast } from 'react-hot-toast';
 import emailjs from '@emailjs/browser';
+import { getCurrentTimezone, convertTimeBetweenTimezones } from '~/utils/timezones';
 
 // Load Stripe outside of component to avoid recreating on every render
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -77,35 +78,68 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
       tutorName: `${tutor.data.firstName} ${tutor.data.lastName}`,
       tutorEmail: tutor.data.email,
       meetingLink: tutor.data.meetingLink,
+      timezone: tutor.data.timezone,
     } : null;
 
     // Send emails if we have tutor info
     if (tutorInfo) {
-      // Calculate end time (start time + 1 hour)
-      const startTimeDate = new Date(`2000-01-01 ${time}`);
-      const endTimeDate = new Date(startTimeDate.getTime() + 60 * 60 * 1000); // Add 1 hour
-      const endTime = endTimeDate.toLocaleTimeString('en-US', { 
+      // Get student's timezone (we need to import getCurrentTimezone)
+      const studentTimezone = getCurrentTimezone();
+      
+      // Calculate end time (start time + 1 hour) for student timezone
+      const studentStartTimeDate = new Date(`2000-01-01 ${time}`);
+      const studentEndTimeDate = new Date(studentStartTimeDate.getTime() + 60 * 60 * 1000); // Add 1 hour
+      const studentEndTime = studentEndTimeDate.toLocaleTimeString('en-US', { 
         hour: 'numeric', 
         minute: '2-digit',
         hour12: true 
       });
 
-      const formParams = {
+      // Convert times to tutor's timezone
+      const tutorStartTime = convertTimeBetweenTimezones(
+        time,
+        studentTimezone,
+        tutorInfo.timezone ?? 'PST'
+      );
+      const tutorStartTimeDate = new Date(`2000-01-01 ${tutorStartTime}`);
+      const tutorEndTimeDate = new Date(tutorStartTimeDate.getTime() + 60 * 60 * 1000); // Add 1 hour
+      const tutorEndTime = tutorEndTimeDate.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      });
+
+      // Email params for tutor (in tutor's timezone)
+      const tutorEmailParams = {
         tutor_name: tutorInfo.tutorName,
         student_name: studentName,
-        start_time: time,
-        end_time: endTime,
-        timeZone: 'UTC',
+        start_time: tutorStartTime,
+        end_time: tutorEndTime,
+        timeZone: tutorInfo.timezone ?? 'PST',
         student_email: studentEmail,
         tutor_email: tutorInfo.tutorEmail,
         location: tutorInfo.meetingLink ?? 'N/A',
       };
 
-      console.log('Sending emails with params:', formParams);
+      // Email params for student (in student's timezone)
+      const studentEmailParams = {
+        tutor_name: tutorInfo.tutorName,
+        student_name: studentName,
+        start_time: time,
+        end_time: studentEndTime,
+        timeZone: studentTimezone,
+        student_email: studentEmail,
+        tutor_email: tutorInfo.tutorEmail,
+        location: tutorInfo.meetingLink ?? 'N/A',
+      };
+
+      console.log('Sending emails with params:');
+      console.log('Tutor email params:', tutorEmailParams);
+      console.log('Student email params:', studentEmailParams);
 
       // Send email to tutor
       try {
-        await emailjs.send("service_z8zzszl", "template_z7etjno", formParams, {
+        await emailjs.send("service_z8zzszl", "template_z7etjno", tutorEmailParams, {
           publicKey: "To4xMN8D9pz4wwmq8",
         });
         console.log('Email sent to tutor successfully');
@@ -115,7 +149,7 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
 
       // Send email to student
       try {
-        await emailjs.send("service_z8zzszl", "template_gvkyabt", formParams, {
+        await emailjs.send("service_z8zzszl", "template_gvkyabt", studentEmailParams, {
           publicKey: "To4xMN8D9pz4wwmq8",
         });
         console.log('Email sent to student successfully');
