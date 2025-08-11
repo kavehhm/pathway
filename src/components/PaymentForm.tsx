@@ -11,6 +11,35 @@ import { toast } from 'react-hot-toast';
 import emailjs from '@emailjs/browser';
 import { getCurrentTimezone, convertTimeBetweenTimezones } from '~/utils/timezones';
 
+// Robust helpers to avoid non-ISO Date parsing issues on mobile browsers
+function parse12HourTimeToMinutes(timeStr: string): number | null {
+  // Expected formats like "9:00 AM" or "12:30 PM"
+  if (!timeStr || typeof timeStr !== 'string') return null;
+  const trimmed = timeStr.trim();
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return null;
+  const hours = parseInt(match[1] ?? '0', 10);
+  const minutes = parseInt(match[2] ?? '0', 10);
+  const period = (match[3] ?? 'AM').toUpperCase();
+  if (Number.isNaN(hours) || Number.isNaN(minutes) || hours < 1 || hours > 12 || minutes < 0 || minutes > 59) {
+    return null;
+  }
+  let hour24 = hours % 12;
+  if (period === 'PM') hour24 += 12;
+  return hour24 * 60 + minutes;
+}
+
+function formatMinutesTo12Hour(totalMinutes: number): string {
+  const minutesNormalized = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+  let hours24 = Math.floor(minutesNormalized / 60);
+  const minutes = minutesNormalized % 60;
+  const period = hours24 >= 12 ? 'PM' : 'AM';
+  if (hours24 === 0) hours24 = 12; // 0 -> 12 AM
+  if (hours24 > 12) hours24 -= 12; // 13-23 -> 1-11 PM
+  const minutesStr = minutes.toString().padStart(2, '0');
+  return `${hours24}:${minutesStr} ${period}`;
+}
+
 // Load Stripe outside of component to avoid recreating on every render
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
@@ -115,14 +144,14 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
       // Get student's timezone (we need to import getCurrentTimezone)
       const studentTimezone = getCurrentTimezone();
       
-      // Calculate end time (start time + 1 hour) for student timezone
-      const studentStartTimeDate = new Date(`2000-01-01 ${time}`);
-      const studentEndTimeDate = new Date(studentStartTimeDate.getTime() + 60 * 60 * 1000); // Add 1 hour
-      const studentEndTime = studentEndTimeDate.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
-      });
+      // Calculate end time (start time + 1 hour) for student timezone using robust parsing
+      const studentStartMinutes = parse12HourTimeToMinutes(time);
+      if (studentStartMinutes === null) {
+        console.error('Failed to parse time for email:', time);
+        return;
+      }
+      const studentEndMinutes = studentStartMinutes + 60; // Add 1 hour
+      const studentEndTime = formatMinutesTo12Hour(studentEndMinutes);
 
       // Convert times to tutor's timezone
       const tutorStartTime = convertTimeBetweenTimezones(
@@ -130,13 +159,15 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
         studentTimezone,
         tutorInfo.timezone ?? 'PST'
       );
-      const tutorStartTimeDate = new Date(`2000-01-01 ${tutorStartTime}`);
-      const tutorEndTimeDate = new Date(tutorStartTimeDate.getTime() + 60 * 60 * 1000); // Add 1 hour
-      const tutorEndTime = tutorEndTimeDate.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
-      });
+      
+      // Calculate tutor end time using robust parsing
+      const tutorStartMinutes = parse12HourTimeToMinutes(tutorStartTime);
+      if (tutorStartMinutes === null) {
+        console.error('Failed to parse tutor start time for email:', tutorStartTime);
+        return;
+      }
+      const tutorEndMinutes = tutorStartMinutes + 60; // Add 1 hour
+      const tutorEndTime = formatMinutesTo12Hour(tutorEndMinutes);
 
       // Email params for tutor (in tutor's timezone)
       const tutorEmailParams = {
