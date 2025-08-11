@@ -127,8 +127,9 @@ export function getCurrentTimezone(): string {
           };
           
           // Check if we have a direct mapping
-          if (timezoneMap[timeZone]) {
-            return timezoneMap[timeZone];
+          const mappedTimezone = timezoneMap[timeZone];
+          if (mappedTimezone) {
+            return mappedTimezone;
           }
           
           // Try to extract from timezone string

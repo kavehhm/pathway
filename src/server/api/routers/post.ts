@@ -433,6 +433,22 @@ export const postRouter = createTRPCRouter({
         free: z.boolean().optional().default(false)
       }),
     )
+    .output(
+      z.union([
+        z.object({
+          id: z.string(),
+          conflicted: z.literal(true),
+        }),
+        z.object({
+          id: z.string(),
+          tutorId: z.string(),
+          date: z.date(),
+          time: z.string(),
+          status: z.string(),
+          free: z.boolean(),
+        })
+      ])
+    )
     .mutation(async ({ input, ctx }) => {
       const { tutorId, date, time, status, free } = input;
 
@@ -455,7 +471,7 @@ export const postRouter = createTRPCRouter({
         return {
           id: existing.id,
           conflicted: true as const,
-        } as any;
+        };
       }
 
       try {
@@ -478,7 +494,7 @@ export const postRouter = createTRPCRouter({
             where: { tutorId, time, date: normalizedDate },
             select: { id: true },
           });
-          return { id: dup?.id ?? 'conflict', conflicted: true as const } as any;
+          return { id: dup?.id ?? 'conflict', conflicted: true as const };
         }
         throw err;
       }
@@ -647,6 +663,25 @@ export const postRouter = createTRPCRouter({
         studentEmail: z.string(),
       }),
     )
+    .output(
+      z.union([
+        z.object({
+          id: z.string(),
+          conflicted: z.literal(true),
+        }),
+        z.object({
+          success: z.literal(true),
+          message: z.string(),
+          bookingId: z.string(),
+          tutorInfo: z.object({
+            tutorName: z.string(),
+            tutorEmail: z.string(),
+            meetingLink: z.string().nullable(),
+            timezone: z.string().nullable(),
+          }).nullable(),
+        })
+      ])
+    )
     .mutation(async ({ input, ctx }) => {
       const { tutorId, date, time, paymentIntentId, studentName, studentEmail } = input;
 
@@ -670,7 +705,7 @@ export const postRouter = createTRPCRouter({
         });
 
         if (existing) {
-          return { id: existing.id, conflicted: true as const } as any;
+          return { id: existing.id, conflicted: true as const };
         }
 
         // Create a booking record in the database

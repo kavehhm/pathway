@@ -68,11 +68,18 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
         studentName,
         studentEmail,
       });
-      if ((result as any)?.conflicted) {
+      if ('conflicted' in result && result.conflicted) {
         toast.error('This time slot was just booked by someone else. Please choose another.');
         return;
       }
-      bookingId = (result as any).bookingId ?? (result as any).id;
+      // At this point, TypeScript knows result is the success type
+      if ('bookingId' in result) {
+        bookingId = result.bookingId;
+      } else {
+        // This should never happen, but handle gracefully
+        toast.error('Unexpected response format from booking');
+        return;
+      }
     } else {
       // Free session - create booking directly
       result = await createBooking.mutateAsync({
@@ -81,7 +88,18 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
         time,
         status: "confirmed",
       });
-      bookingId = result.id;
+      if ('conflicted' in result && result.conflicted) {
+        toast.error('This time slot was just booked by someone else. Please choose another.');
+        return;
+      }
+      // At this point, TypeScript knows result is the success type
+      if ('id' in result) {
+        bookingId = result.id;
+      } else {
+        // This should never happen, but handle gracefully
+        toast.error('Unexpected response format from booking');
+        return;
+      }
     }
 
     // Get tutor info for emails (since createBooking doesn't return it)

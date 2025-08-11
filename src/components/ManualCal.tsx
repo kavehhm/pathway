@@ -589,9 +589,9 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
           <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
             <strong>Mobile Debug Info:</strong><br/>
             Student Timezone: {studentTimezone}<br/>
-            Tutor Timezone: {tutor.data?.timezone || 'Unknown'}<br/>
+            Tutor Timezone: {tutor.data?.timezone ?? 'Unknown'}<br/>
             Available Times Count: {availableTimes.length}<br/>
-            Selected Date: {selectedDate?.toDateString() || 'None'}
+            Selected Date: {selectedDate?.toDateString() ?? 'None'}
             
             {/* Timezone override button */}
             <div className="mt-2">
@@ -629,7 +629,7 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
               <option value="HDT">Hawaii Daylight Time (HDT)</option>
             </select>
             <div className="mt-1 text-xs text-gray-600">
-              If times still don't appear, try different timezone options
+              If times still do not appear, try different timezone options
             </div>
             <button
               type="button"

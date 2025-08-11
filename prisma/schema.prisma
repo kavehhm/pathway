@@ -13,10 +13,10 @@ generator client {
 
 
 model Availability {
-   id         String     @id @default(uuid())
-   visible Boolean
-   startTime DateTime?
-   endTime DateTime?
+  id         String   @id @default(uuid())
+  visible    Boolean
+  startTime  DateTime?
+  endTime    DateTime?
   userId     String
   day        String
   available  Boolean
@@ -30,7 +30,7 @@ model Availability {
 
 model User {
   id             String   @id @default(uuid())
-  username       String  @unique @default(cuid())
+  username       String   @unique @default(cuid())
   email          String   @default("None")
   bio            String   @default("None")
   clerkId        String   @unique
@@ -69,10 +69,11 @@ model Booking {
   status      String   @default("confirmed") // confirmed, cancelled, completed
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  free        Boolean @default(false)
+  free        Boolean  @default(false)
   
   tutor       User     @relation("TutorBookings", fields: [tutorId], references: [clerkId])
 
   @@index([tutorId])
   @@index([date])
+  @@unique([tutorId, date, time])
 }
