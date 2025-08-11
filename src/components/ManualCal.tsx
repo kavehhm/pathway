@@ -16,6 +16,35 @@ interface TimeSlot {
   available: boolean;
 }
 
+// Robust helpers to avoid non-ISO Date parsing issues on mobile browsers
+function parse12HourTimeToMinutes(timeStr: string): number | null {
+  // Expected formats like "9:00 AM" or "12:30 PM"
+  if (!timeStr || typeof timeStr !== 'string') return null;
+  const trimmed = timeStr.trim();
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return null;
+  const hours = parseInt(match[1] ?? '0', 10);
+  const minutes = parseInt(match[2] ?? '0', 10);
+  const period = (match[3] ?? 'AM').toUpperCase();
+  if (Number.isNaN(hours) || Number.isNaN(minutes) || hours < 1 || hours > 12 || minutes < 0 || minutes > 59) {
+    return null;
+  }
+  let hour24 = hours % 12;
+  if (period === 'PM') hour24 += 12;
+  return hour24 * 60 + minutes;
+}
+
+function formatMinutesTo12Hour(totalMinutes: number): string {
+  const minutesNormalized = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+  let hours24 = Math.floor(minutesNormalized / 60);
+  const minutes = minutesNormalized % 60;
+  const period = hours24 >= 12 ? 'PM' : 'AM';
+  if (hours24 === 0) hours24 = 12; // 0 -> 12 AM
+  if (hours24 > 12) hours24 -= 12; // 13-23 -> 1-11 PM
+  const minutesStr = minutes.toString().padStart(2, '0');
+  return `${hours24}:${minutesStr} ${period}`;
+}
+
 const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string>('');
@@ -110,26 +139,33 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
         console.log('Day availabilities for', selectedDay, ':', dayAvailabilities);
         
         let allTimeSlots: TimeSlot[] = [];
+        const normalizedStudentTz = (studentTimezone || 'PST').toUpperCase();
         
         // Process all availability entries for this day
         dayAvailabilities.forEach((dayAvailability, index) => {
           if (dayAvailability.timeRange) {
-            // Parse time range (assuming format like "9:00 AM - 5:00 PM")
-            const [startTime, endTime] = dayAvailability.timeRange.split(' - ');
+            // Parse time range (accept regular/en/em dashes and variable spaces)
+            const parts = String(dayAvailability.timeRange)
+              .replace(/[–—]/g, '-')
+              .split(/\s*-\s*/);
+            const startTime = parts[0];
+            const endTime = parts[1];
             
             console.log(`Time range ${index + 1}:`, startTime, 'to', endTime);
             
-            // Generate time slots every hour for this time range
-            const start = new Date(`2000-01-01 ${startTime}`);
-            const end = new Date(`2000-01-01 ${endTime}`);
-            
-            while (start < end) {
-              // Use a more reliable time formatting approach for mobile
-              const hours = start.getHours();
-              const minutes = start.getMinutes();
-              const period = hours >= 12 ? 'PM' : 'AM';
-              const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-              const timeString = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+            // Generate time slots every hour for this time range using robust parsing
+            if (!startTime || !endTime) {
+              console.warn('Invalid timeRange format, expected "HH:MM AM/PM - HH:MM AM/PM" but got:', dayAvailability.timeRange);
+              return;
+            }
+            const startMinutes = parse12HourTimeToMinutes(startTime ?? '');
+            const endMinutes = parse12HourTimeToMinutes(endTime ?? '');
+            if (startMinutes == null || endMinutes == null) {
+              console.warn('Failed to parse time range:', { startTime, endTime });
+              return;
+            }
+            for (let cur = startMinutes; cur < endMinutes; cur += 60) {
+              const timeString = formatMinutesTo12Hour(cur);
               
               console.log('Original time string (manual format):', timeString);
               console.log('Mobile device detected:', isMobile);
@@ -138,14 +174,14 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
               // Always convert time from tutor's timezone to student's timezone
               const displayTime = convertTimeBetweenTimezones(
                 timeString,
-                tutor.data?.timezone ?? 'PST',
-                studentTimezone
+                (tutor.data?.timezone ?? 'PST').toUpperCase(),
+                normalizedStudentTz
               );
               
               console.log('Converted time:', displayTime);
               console.log('Conversion details:', {
                 originalTime: timeString,
-                fromTimezone: tutor.data?.timezone ?? 'PST',
+                fromTimezone: (tutor.data?.timezone ?? 'PST').toUpperCase(),
                 toTimezone: studentTimezone,
                 convertedTime: displayTime
               });
@@ -171,7 +207,6 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
                 }
               }
               
-              start.setHours(start.getHours() + 1);
             }
           }
         });
@@ -180,9 +215,9 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
         
         // Sort time slots chronologically
         allTimeSlots.sort((a, b) => {
-          const timeA = new Date(`2000-01-01 ${a.time}`);
-          const timeB = new Date(`2000-01-01 ${b.time}`);
-          return timeA.getTime() - timeB.getTime();
+          const aMin = parse12HourTimeToMinutes(a.time) ?? 0;
+          const bMin = parse12HourTimeToMinutes(b.time) ?? 0;
+          return aMin - bMin;
         });
         
         // Filter out times that have already passed if viewing today
@@ -202,9 +237,9 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
           console.log('Filtering out times before:', currentTime);
           
           allTimeSlots = allTimeSlots.filter(slot => {
-            const slotTime = new Date(`2000-01-01 ${slot.time}`);
-            const currentTimeDate = new Date(`2000-01-01 ${currentTime}`);
-            const isTimePassed = slotTime <= currentTimeDate;
+            const slotMinutes = parse12HourTimeToMinutes(slot.time);
+            const nowMinutes = currentHours * 60 + currentMinutes;
+            const isTimePassed = (slotMinutes ?? Infinity) <= nowMinutes;
             
             if (isTimePassed) {
               console.log(`Filtering out ${slot.time} (already passed)`);
@@ -242,10 +277,10 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
         }
         
         console.log('Generated all time slots (after filtering):', allTimeSlots);
-        console.log('Mobile debug info:', {
+          console.log('Mobile debug info:', {
           isMobile,
           userAgent: navigator.userAgent,
-          studentTimezone,
+            studentTimezone: normalizedStudentTz,
           tutorTimezone: tutor.data?.timezone,
           selectedDate: selectedDate.toISOString(),
           selectedDay,
@@ -257,24 +292,26 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
         if (allTimeSlots.length === 0) {
           console.warn('No time slots generated, this might be a mobile timezone issue');
           console.log('Tutor availability:', tutor.data?.availability);
-          console.log('Student timezone:', studentTimezone);
+          console.log('Student timezone:', normalizedStudentTz);
           console.log('Tutor timezone:', tutor.data?.timezone);
           console.log('Is mobile device:', isMobile);
           
           // Try to generate time slots without timezone conversion as fallback
           dayAvailabilities.forEach((dayAvailability) => {
             if (dayAvailability.timeRange) {
-              const [startTime, endTime] = dayAvailability.timeRange.split(' - ');
-              const start = new Date(`2000-01-01 ${startTime}`);
-              const end = new Date(`2000-01-01 ${endTime}`);
-              
-              while (start < end) {
-                // Use manual formatting for consistency across devices
-                const hours = start.getHours();
-                const minutes = start.getMinutes();
-                const period = hours >= 12 ? 'PM' : 'AM';
-                const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-                const timeString = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+              const parts = String(dayAvailability.timeRange)
+                .replace(/[–—]/g, '-')
+                .split(/\s*-\s*/);
+              const startTime = parts[0] ?? '';
+              const endTime = parts[1] ?? '';
+              const startMinutes = parse12HourTimeToMinutes(startTime);
+              const endMinutes = parse12HourTimeToMinutes(endTime);
+              if (startMinutes == null || endMinutes == null) {
+                console.warn('Fallback: failed to parse time range:', { startTime, endTime });
+                return;
+              }
+              for (let cur = startMinutes; cur < endMinutes; cur += 60) {
+                const timeString = formatMinutesTo12Hour(cur);
                 
                 console.log('Fallback time slot (manual format):', timeString);
                 
@@ -282,8 +319,6 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
                   time: timeString,
                   available: true
                 });
-                
-                start.setHours(start.getHours() + 1);
               }
             }
           });
@@ -295,24 +330,26 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
             console.log('Trying fallback with tutor timezone directly');
             dayAvailabilities.forEach((dayAvailability) => {
               if (dayAvailability.timeRange) {
-                const [startTime, endTime] = dayAvailability.timeRange.split(' - ');
-                const start = new Date(`2000-01-01 ${startTime}`);
-                const end = new Date(`2000-01-01 ${endTime}`);
-                
-                while (start < end) {
-                  // Use manual formatting for consistency across devices
-                  const hours = start.getHours();
-                  const minutes = start.getMinutes();
-                  const period = hours >= 12 ? 'PM' : 'AM';
-                  const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-                  const timeString = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+                const parts = String(dayAvailability.timeRange)
+                  .replace(/[–—]/g, '-')
+                  .split(/\s*-\s*/);
+              const startTime = parts[0];
+              const endTime = parts[1];
+              const startMinutes = parse12HourTimeToMinutes(startTime ?? '');
+              const endMinutes = parse12HourTimeToMinutes(endTime ?? '');
+              if (startMinutes == null || endMinutes == null) {
+                console.warn('Second fallback: failed to parse time range:', { startTime, endTime });
+                return;
+              }
+              for (let cur = startMinutes; cur < endMinutes; cur += 60) {
+                const timeString = formatMinutesTo12Hour(cur);
                   
                   console.log('Second fallback time slot (manual format):', timeString);
                   
                   // Convert from tutor's timezone to a default timezone (PST) as last resort
                   const fallbackTime = convertTimeBetweenTimezones(
                     timeString,
-                    tutor.data?.timezone ?? 'PST',
+                    (tutor.data?.timezone ?? 'PST').toUpperCase(),
                     'PST'
                   );
                   
@@ -320,9 +357,7 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
                     time: fallbackTime,
                     available: true
                   });
-                  
-                  start.setHours(start.getHours() + 1);
-                }
+              }
               }
             });
             console.log('Fallback time slots (tutor timezone to PST):', allTimeSlots);
