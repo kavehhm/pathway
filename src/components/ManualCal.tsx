@@ -26,6 +26,8 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
   const [studentEmail, setStudentEmail] = useState('');
   const [studentTimezone, setStudentTimezone] = useState('PST');
   const [isFirstSession, setIsFirstSession] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showTimezoneOverride, setShowTimezoneOverride] = useState(false);
   
   // Fetch tutor availability using tRPC
 //   const { data: tutorData, isLoading, error } = api.post.getTutor.useQuery(userId, {
@@ -98,6 +100,12 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
         (avail) => avail.day === selectedDay && avail.available
       );
 
+      console.log('Selected date:', selectedDate);
+      console.log('Selected day:', selectedDay);
+      console.log('Day availabilities:', dayAvailabilities);
+      console.log('Student timezone:', studentTimezone);
+      console.log('Tutor timezone:', tutor.data?.timezone);
+
       if (dayAvailabilities.length > 0) {
         console.log('Day availabilities for', selectedDay, ':', dayAvailabilities);
         
@@ -122,12 +130,16 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
                 hour12: true 
               });
               
+              console.log('Original time string:', timeString);
+              
               // Always convert time from tutor's timezone to student's timezone
               const displayTime = convertTimeBetweenTimezones(
                 timeString,
                 tutor.data?.timezone ?? 'PST',
                 studentTimezone
               );
+              
+              console.log('Converted time:', displayTime);
               
               // Only add if not already in the list (avoid duplicates)
               if (!allTimeSlots.some(slot => slot.time === displayTime)) {
@@ -141,6 +153,8 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
             }
           }
         });
+        
+        console.log('All time slots before filtering:', allTimeSlots);
         
         // Sort time slots chronologically
         allTimeSlots.sort((a, b) => {
@@ -205,17 +219,124 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
         }
         
         console.log('Generated all time slots (after filtering):', allTimeSlots);
+        
+        // Add fallback for mobile devices if no time slots are available
+        if (allTimeSlots.length === 0) {
+          console.warn('No time slots generated, this might be a mobile timezone issue');
+          console.log('Tutor availability:', tutor.data?.availability);
+          console.log('Student timezone:', studentTimezone);
+          console.log('Tutor timezone:', tutor.data?.timezone);
+          
+          // Try to generate time slots without timezone conversion as fallback
+          dayAvailabilities.forEach((dayAvailability) => {
+            if (dayAvailability.timeRange) {
+              const [startTime, endTime] = dayAvailability.timeRange.split(' - ');
+              const start = new Date(`2000-01-01 ${startTime}`);
+              const end = new Date(`2000-01-01 ${endTime}`);
+              
+              while (start < end) {
+                const timeString = start.toLocaleTimeString('en-US', { 
+                  hour: 'numeric', 
+                  minute: '2-digit',
+                  hour12: true 
+                });
+                
+                allTimeSlots.push({
+                  time: timeString,
+                  available: true
+                });
+                
+                start.setHours(start.getHours() + 1);
+              }
+            }
+          });
+          
+          console.log('Fallback time slots (without conversion):', allTimeSlots);
+          
+          // If still no time slots, try using tutor's timezone directly
+          if (allTimeSlots.length === 0 && tutor.data?.timezone) {
+            console.log('Trying fallback with tutor timezone directly');
+            dayAvailabilities.forEach((dayAvailability) => {
+              if (dayAvailability.timeRange) {
+                const [startTime, endTime] = dayAvailability.timeRange.split(' - ');
+                const start = new Date(`2000-01-01 ${startTime}`);
+                const end = new Date(`2000-01-01 ${endTime}`);
+                
+                while (start < end) {
+                  const timeString = start.toLocaleTimeString('en-US', { 
+                    hour: 'numeric', 
+                    minute: '2-digit',
+                    hour12: true 
+                  });
+                  
+                  // Convert from tutor's timezone to a default timezone (PST) as last resort
+                  const fallbackTime = convertTimeBetweenTimezones(
+                    timeString,
+                    tutor.data?.timezone ?? 'PST',
+                    'PST'
+                  );
+                  
+                  allTimeSlots.push({
+                    time: fallbackTime,
+                    available: true
+                  });
+                  
+                  start.setHours(start.getHours() + 1);
+                }
+              }
+            });
+            console.log('Fallback time slots (tutor timezone to PST):', allTimeSlots);
+          }
+        }
+        
         setAvailableTimes(allTimeSlots);
       } else {
         console.log('No availability found for', selectedDay);
         setAvailableTimes([]);
       }
     }
-  }, [selectedDate, tutor.data]);
+  }, [selectedDate, tutor.data, studentTimezone]);
 
   // Set student timezone on component mount
   useEffect(() => {
-    setStudentTimezone(getCurrentTimezone());
+    const detectedTimezone = getCurrentTimezone();
+    console.log('Detected timezone:', detectedTimezone);
+    console.log('Navigator timezone:', Intl?.DateTimeFormat?.()?.resolvedOptions?.()?.timeZone);
+    console.log('Timezone offset:', new Date().getTimezoneOffset());
+    console.log('Current date string:', new Date().toString());
+    
+    setStudentTimezone(detectedTimezone);
+    
+    // Test timezone conversion
+    console.log('Testing timezone conversion:');
+    try {
+      const testTime = '2:00 PM';
+      const convertedTime = convertTimeBetweenTimezones(testTime, 'PST', 'EST');
+      console.log(`Test conversion ${testTime} PST to EST:`, convertedTime);
+    } catch (error) {
+      console.error('Timezone conversion test failed:', error);
+    }
+    
+    // Detect if user is on mobile
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+      const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+      const isMobileViewport = window.innerWidth <= 768;
+      
+      setIsMobile(isMobileDevice || isMobileViewport);
+      console.log('Mobile detection:', { isMobileDevice, isMobileViewport, isMobile: isMobileDevice || isMobileViewport });
+      console.log('User agent:', userAgent);
+      console.log('Viewport width:', window.innerWidth);
+    };
+    
+    checkMobile();
+    
+    // Add resize listener for viewport changes
+    window.addEventListener('resize', checkMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
   }, []);
 
   const handleBookNow = () => {
@@ -250,14 +371,26 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
 
     // If first session is free and user checked the box, create booking directly
     if (tutor.data?.firstSessionFree && isFirstSession) {
+      // Store booking time in tutor's timezone to prevent duplicates mismatching
+      const timeInTutorTimezone = convertTimeBetweenTimezones(
+        selectedTime,
+        studentTimezone,
+        tutor.data.timezone ?? 'PST'
+      );
+
       createBooking.mutate({
         tutorId: tutor.data.clerkId,
         date: selectedDate.toISOString().split('T')[0] ?? '',
-        time: selectedTime,
+        time: timeInTutorTimezone,
         status: "confirmed",
         free : true,
       }, {
-        onSuccess: (result) => {
+        onSuccess: (result: any) => {
+          if (result?.conflicted) {
+            toast.error('This time slot was just booked by someone else. Please choose another.');
+            tutor.refetch();
+            return;
+          }
           toast.success('First session is free! Your booking is confirmed.');
           
           // Send confirmation emails
@@ -450,6 +583,70 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Select Time
         </label>
+        
+        {/* Debug info for mobile */}
+        {isMobile && (
+          <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+            <strong>Mobile Debug Info:</strong><br/>
+            Student Timezone: {studentTimezone}<br/>
+            Tutor Timezone: {tutor.data?.timezone || 'Unknown'}<br/>
+            Available Times Count: {availableTimes.length}<br/>
+            Selected Date: {selectedDate?.toDateString() || 'None'}
+            
+            {/* Timezone override button */}
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => setShowTimezoneOverride(!showTimezoneOverride)}
+                className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+              >
+                {showTimezoneOverride ? 'Hide' : 'Override'} Timezone
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* Timezone override section */}
+        {isMobile && showTimezoneOverride && (
+          <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
+            <strong>Manual Timezone Selection:</strong><br/>
+            <select
+              value={studentTimezone}
+              onChange={(e) => setStudentTimezone(e.target.value)}
+              className="mt-1 w-full px-2 py-1 border border-blue-300 rounded text-xs"
+            >
+              <option value="PST">Pacific Standard Time (PST)</option>
+              <option value="PDT">Pacific Daylight Time (PDT)</option>
+              <option value="MST">Mountain Standard Time (MST)</option>
+              <option value="MDT">Mountain Daylight Time (MDT)</option>
+              <option value="CST">Central Standard Time (CST)</option>
+              <option value="CDT">Central Daylight Time (CDT)</option>
+              <option value="EST">Eastern Standard Time (EST)</option>
+              <option value="EDT">Eastern Daylight Time (EDT)</option>
+              <option value="AKST">Alaska Standard Time (AKST)</option>
+              <option value="AKDT">Alaska Daylight Time (AKDT)</option>
+              <option value="HST">Hawaii Standard Time (HST)</option>
+              <option value="HDT">Hawaii Daylight Time (HDT)</option>
+            </select>
+            <div className="mt-1 text-xs text-gray-600">
+              If times still don't appear, try different timezone options
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                // Force a refresh of the time slots
+                if (selectedDate) {
+                  setSelectedDate(null);
+                  setTimeout(() => setSelectedDate(selectedDate), 100);
+                }
+              }}
+              className="mt-2 w-full text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600"
+            >
+              Refresh Time Slots
+            </button>
+          </div>
+        )}
+        
         <select
           value={selectedTime}
           onChange={(e) => setSelectedTime(e.target.value)}
@@ -474,6 +671,16 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
             </option>
           ))}
         </select>
+        
+        {/* Additional debug info */}
+        {isMobile && availableTimes.length === 0 && selectedDate && (
+          <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800">
+            <strong>No time slots available. Possible issues:</strong><br/>
+            • Timezone conversion problem<br/>
+            • Mobile browser compatibility issue<br/>
+            • Check console for detailed logs
+          </div>
+        )}
       </div>
 
       {/* Book Now Button */}

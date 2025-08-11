@@ -436,18 +436,52 @@ export const postRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
       const { tutorId, date, time, status, free } = input;
 
-      // Convert date string to DateTime
+      // Convert date string to DateTime (normalized to midnight UTC to match unique composite)
       const bookingDate = new Date(date);
+      const normalizedDate = new Date(bookingDate.toISOString().split('T')[0] ?? date);
 
-      return ctx.db.booking.create({
-        data: {
+      // Guard: prevent duplicate booking at same tutor/date/time
+      const existing = await ctx.db.booking.findFirst({
+        where: {
           tutorId,
-          date: bookingDate,
           time,
-          status,
-          free
+          date: normalizedDate,
         },
+        select: { id: true },
       });
+
+      if (existing) {
+        // Idempotent: return existing-like response with a hint
+        return {
+          id: existing.id,
+          conflicted: true as const,
+        } as any;
+      }
+
+      try {
+        const created = await ctx.db.booking.create({
+          data: {
+            tutorId,
+            date: normalizedDate,
+            time,
+            status,
+            free,
+          },
+        });
+        return created;
+      } catch (err) {
+        // In case of a race, unique constraint may still throw. Convert to graceful conflict.
+        // Prisma code P2002 corresponds to unique constraint violation.
+        const anyErr = err as any;
+        if (anyErr?.code === 'P2002') {
+          const dup = await ctx.db.booking.findFirst({
+            where: { tutorId, time, date: normalizedDate },
+            select: { id: true },
+          });
+          return { id: dup?.id ?? 'conflict', conflicted: true as const } as any;
+        }
+        throw err;
+      }
     }),
 
   createStripeConnectAccount: publicProcedure
@@ -626,11 +660,24 @@ export const postRouter = createTRPCRouter({
           throw new Error('Payment not completed');
         }
 
+        // Normalize date and guard against duplicates
+        const bookingDate = new Date(date);
+        const normalizedDate = new Date(bookingDate.toISOString().split('T')[0] ?? date);
+
+        const existing = await ctx.db.booking.findFirst({
+          where: { tutorId, time, date: normalizedDate },
+          select: { id: true },
+        });
+
+        if (existing) {
+          return { id: existing.id, conflicted: true as const } as any;
+        }
+
         // Create a booking record in the database
         const booking = await ctx.db.booking.create({
           data: {
             tutorId,
-            date: new Date(date),
+            date: normalizedDate,
             time,
             status: 'confirmed'
           }

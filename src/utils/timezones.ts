@@ -107,18 +107,64 @@ export function convertTimeBetweenTimezones(
 }
 
 export function getCurrentTimezone(): string {
-  const now = new Date();
-  const timezoneOffset = -now.getTimezoneOffset() / 60;
-  
-  // Map offset to timezone
-  switch (timezoneOffset) {
-    case -8: return 'PST';
-    case -7: return 'PDT';
-    case -6: return 'MDT';
-    case -5: return 'CDT';
-    case -4: return 'EDT';
-    case -9: return 'AKST';
-    case -10: return 'HST';
-    default: return 'PST'; // Default fallback
+  try {
+    // Try multiple methods to detect timezone
+    const now = new Date();
+    
+    // Method 1: Use Intl.DateTimeFormat if available (most reliable)
+    if (typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
+      try {
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (timeZone) {
+          // Map common timezone names to our format
+          const timezoneMap: Record<string, string> = {
+            'America/Los_Angeles': 'PST',
+            'America/Denver': 'MST', 
+            'America/Chicago': 'CST',
+            'America/New_York': 'EST',
+            'America/Anchorage': 'AKST',
+            'Pacific/Honolulu': 'HST'
+          };
+          
+          // Check if we have a direct mapping
+          if (timezoneMap[timeZone]) {
+            return timezoneMap[timeZone];
+          }
+          
+          // Try to extract from timezone string
+          if (timeZone.includes('Los_Angeles') || timeZone.includes('Vancouver')) return 'PST';
+          if (timeZone.includes('Denver') || timeZone.includes('Phoenix')) return 'MST';
+          if (timeZone.includes('Chicago') || timeZone.includes('Houston')) return 'CST';
+          if (timeZone.includes('New_York') || timeZone.includes('Miami')) return 'EST';
+          if (timeZone.includes('Anchorage')) return 'AKST';
+          if (timeZone.includes('Honolulu')) return 'HST';
+        }
+      } catch (e) {
+        console.warn('Intl.DateTimeFormat failed, falling back to offset method:', e);
+      }
+    }
+    
+    // Method 2: Use timezone offset (fallback)
+    const timezoneOffset = -now.getTimezoneOffset() / 60;
+    
+    // Map offset to timezone with better handling for edge cases
+    switch (Math.round(timezoneOffset)) {
+      case -8: return 'PST';
+      case -7: return 'PDT';
+      case -6: return 'MDT';
+      case -5: return 'CDT';
+      case -4: return 'EDT';
+      case -9: return 'AKST';
+      case -10: return 'HST';
+      default: {
+        // If we can't determine, try to guess based on common patterns
+        console.warn(`Unknown timezone offset: ${timezoneOffset}, defaulting to PST`);
+        return 'PST';
+      }
+    }
+  } catch (error) {
+    console.error('Error detecting timezone:', error);
+    // Ultimate fallback
+    return 'PST';
   }
 } 

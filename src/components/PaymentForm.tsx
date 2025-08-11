@@ -52,16 +52,27 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
     let bookingId: string;
     
     if (paymentIntent) {
-      // Paid session - use existing bookSession mutation
+      // Paid session - create booking (with tutor timezone to prevent duplicates)
+      const tutorTimezone = tutor.data?.timezone ?? 'PST';
+      const studentTimezone = getCurrentTimezone();
+      const timeInTutorTimezone = convertTimeBetweenTimezones(
+        time,
+        studentTimezone,
+        tutorTimezone
+      );
       result = await bookSession.mutateAsync({
         tutorId,
         date,
-        time,
+        time: timeInTutorTimezone,
         paymentIntentId: paymentIntent.id,
         studentName,
         studentEmail,
       });
-      bookingId = result.bookingId;
+      if ((result as any)?.conflicted) {
+        toast.error('This time slot was just booked by someone else. Please choose another.');
+        return;
+      }
+      bookingId = (result as any).bookingId ?? (result as any).id;
     } else {
       // Free session - create booking directly
       result = await createBooking.mutateAsync({
@@ -113,6 +124,7 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
       const tutorEmailParams = {
         tutor_name: tutorInfo.tutorName,
         student_name: studentName,
+        date,
         start_time: tutorStartTime,
         end_time: tutorEndTime,
         timeZone: tutorInfo.timezone ?? 'PST',
@@ -125,6 +137,7 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
       const studentEmailParams = {
         tutor_name: tutorInfo.tutorName,
         student_name: studentName,
+        date,
         start_time: time,
         end_time: studentEndTime,
         timeZone: studentTimezone,
