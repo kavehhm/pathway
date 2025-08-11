@@ -1,0 +1,1 @@
+WITH ranked AS (SELECT id, "tutorId", "date", "time", ROW_NUMBER() OVER (PARTITION BY "tutorId", "date", "time" ORDER BY id) AS rn FROM "Booking") DELETE FROM "Booking" b USING ranked r WHERE b.id = r.id AND r.rn > 1;

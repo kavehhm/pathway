@@ -175,6 +175,20 @@ const User = () => {
                 </p>
                 {/* ADD TUTOR PRICE */}
               </div>
+              {/* Verified / Not Verified flag - HIDDEN FOR NOW
+              <div className="mt-2">
+                {Boolean((tutor.data as any)?.eduVerified) ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                    Verified · {((tutor.data as any)?.eduEmail ?? '').split('@')[1]}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">
+                    Not verified
+                  </span>
+                )}
+              </div>
+              */}
+
               {/* Reviews */}
               {/* <div className="mt-4">
                 <h2 className="sr-only">Reviews</h2>

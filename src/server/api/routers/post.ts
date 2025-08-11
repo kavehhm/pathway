@@ -326,6 +326,114 @@ export const postRouter = createTRPCRouter({
     });
   }),
 
+  // .edu email verification
+  eduStartVerification: publicProcedure
+    .input(
+      z.object({
+        tutorId: z.string(), // clerkId
+        eduEmail: z.string().email(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tutorId, eduEmail } = input;
+
+      const normalizedEmail = eduEmail.trim().toLowerCase();
+      if (!normalizedEmail.endsWith('.edu')) {
+        throw new Error('Email must end with .edu');
+      }
+
+      // Generate 6-digit numeric code
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+      await ctx.db.user.update({
+        where: { clerkId: tutorId },
+        data: ({
+          eduEmail: normalizedEmail,
+          eduVerified: false,
+          eduVerificationCode: code,
+          eduVerificationExpiresAt: expiresAt,
+        } as any),
+      });
+
+      return { code, expiresAt };
+    }),
+
+  eduResendVerification: publicProcedure
+    .input(
+      z.object({
+        tutorId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tutorId } = input;
+      const user = (await ctx.db.user.findUnique({
+        where: { clerkId: tutorId },
+        select: ({ eduEmail: true } as any),
+      })) as any;
+      if (!user?.eduEmail) {
+        throw new Error('No .edu email on file');
+      }
+      if (!user.eduEmail.toLowerCase().endsWith('.edu')) {
+        throw new Error('Email on file is not a .edu email');
+      }
+
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+      await ctx.db.user.update({
+        where: { clerkId: tutorId },
+        data: ({
+          eduVerified: false,
+          eduVerificationCode: code,
+          eduVerificationExpiresAt: expiresAt,
+        } as any),
+      });
+
+      return { code, expiresAt, eduEmail: user.eduEmail };
+    }),
+
+  eduVerifyCode: publicProcedure
+    .input(
+      z.object({
+        tutorId: z.string(),
+        code: z.string().min(4).max(10),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tutorId, code } = input;
+      const user = (await ctx.db.user.findUnique({
+        where: { clerkId: tutorId },
+        select: ({
+          eduVerificationCode: true,
+          eduVerificationExpiresAt: true,
+        } as any),
+      })) as any;
+
+      if (!user?.eduVerificationCode || !user.eduVerificationExpiresAt) {
+        throw new Error('No verification in progress');
+      }
+
+      if (new Date() > user.eduVerificationExpiresAt) {
+        throw new Error('Verification code expired');
+      }
+
+      if (code.trim() !== user.eduVerificationCode) {
+        throw new Error('Invalid verification code');
+      }
+
+      await ctx.db.user.update({
+        where: { clerkId: tutorId },
+        data: ({
+          eduVerified: true,
+          eduVerificationCode: null,
+          eduVerificationExpiresAt: null,
+        } as any),
+      });
+
+      return { verified: true };
+    }),
+
   getSingleTutor: publicProcedure.input(z.string()).query(({ input, ctx }) => {
     return ctx.db.user.findUnique({
       where: {

@@ -57,6 +57,12 @@ model User {
   stripeAccountStatus String? // pending, active, restricted, etc.
   firstSessionFree Boolean @default(false)
 
+  // .edu email verification fields
+  eduEmail                     String?   @db.VarChar(255)
+  eduVerified                  Boolean   @default(false)
+  eduVerificationCode          String?   @db.VarChar(10)
+  eduVerificationExpiresAt     DateTime?
+
   availability Availability[]
   bookings     Booking[]     @relation("TutorBookings")
 }

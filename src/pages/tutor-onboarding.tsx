@@ -29,6 +29,7 @@ import { CiCirclePlus } from "react-icons/ci";
 import { US_TIMEZONES } from "~/utils/timezones";
 import StripeConnectSetup from "~/components/StripeConnectSetup";
 import dayjs from 'dayjs';
+import emailjs from "@emailjs/browser";
 
 const BIO_LENGTH = 250;
 
@@ -68,6 +69,11 @@ export default function Example() {
   const [otherMajor, setOtherMajor] = useState("");
   const [meetingLink, setMeetingLink] = useState(tutor.data?.meetingLink);
   const [timezone, setTimezone] = useState('PST');
+  // .edu verification
+  const [eduEmailInput, setEduEmailInput] = useState<string>("");
+  const [verificationCodeInput, setVerificationCodeInput] = useState<string>("");
+  const [isSendingCode, setIsSendingCode] = useState<boolean>(false);
+  const [isVerifyingCode, setIsVerifyingCode] = useState<boolean>(false);
 
   const [editAvailability, setEditAvailability] = useState(false);
 
@@ -230,6 +236,7 @@ export default function Example() {
     ) {
       setAvailability(tutor.data.availability);
     }
+    setEduEmailInput((tutor.data as any)?.eduEmail ?? "");
   }, [tutor.isFetchedAfterMount, tutor.data]);
 
   // Handle Stripe return and refresh account status
@@ -320,6 +327,11 @@ export default function Example() {
       await router.replace(`/tutors/${username}`);
     },
   });
+  // .edu verification mutations
+  const eduStart = api.post.eduStartVerification.useMutation();
+  const eduResend = api.post.eduResendVerification.useMutation();
+  const eduVerify = api.post.eduVerifyCode.useMutation();
+
 
   // Separate mutation for auto-sync (no redirect)
   const updateUserProfileFields = api.post.updateTutor.useMutation({
@@ -1139,6 +1151,135 @@ export default function Example() {
                 <p>• To update the email being used, go to the name and profile icon for the option to change.</p>
                 <p>• Any change to your school, major, or GPA will require the restarting of the approval process.</p>
               </div>
+
+            {/* University Email Verification - HIDDEN FOR NOW
+            <div className="rounded-2xl bg-white/70 backdrop-blur-sm shadow-xl border border-white/20 p-8 mt-10">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
+                  <svg className="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m6-6H6" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">University Email Verification</h2>
+                  <p className="text-gray-600">Verify your .edu email to display a verified badge on your profile. Optional.</p>
+                </div>
+              </div>
+
+              {(tutor.data as any)?.eduVerified ? (
+                <div className="inline-flex items-center gap-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700 ring-1 ring-inset ring-green-600/20">
+                  <span className="inline-block h-2 w-2 rounded-full bg-green-600" />
+                  Verified: {(((tutor.data as any)?.eduEmail ?? '') as string).split('@')[1]}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:max-w-md">
+                  <div>
+                    <label className="block text-sm font-medium leading-6 text-gray-900">.edu Email</label>
+                    <input
+                      type="email"
+                      value={eduEmailInput}
+                      onChange={(e) => setEduEmailInput(e.target.value)}
+                      placeholder="name@school.edu"
+                      className="mt-2 block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={isSendingCode || !eduEmailInput}
+                      onClick={async () => {
+                        try {
+                          setIsSendingCode(true);
+                          const res = await eduStart.mutateAsync({ tutorId: user.user?.id ?? "", eduEmail: eduEmailInput });
+                          try {
+                            await emailjs.send(
+                              "service_z8zzszl",
+                              (process.env.NEXT_PUBLIC_EMAILJS_VERIFY_TEMPLATE_ID as string) || "template_edu_verify",
+                              {
+                                verification_code: res.code,
+                                recipient_email: eduEmailInput,
+                              },
+                              { publicKey: "To4xMN8D9pz4wwmq8" },
+                            );
+                          } catch {}
+                          toast.success(`Verification code sent to ${eduEmailInput}`);
+                        } catch (err: any) {
+                          toast.error(err?.message ?? "Failed to send code");
+                        } finally {
+                          setIsSendingCode(false);
+                        }
+                      }}
+                      className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+                    >
+                      {isSendingCode ? "Sending..." : "Send code"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSendingCode}
+                      onClick={async () => {
+                        try {
+                          setIsSendingCode(true);
+                          const res = await eduResend.mutateAsync({ tutorId: user.user?.id ?? "" });
+                          try {
+                            await emailjs.send(
+                              "service_z8zzszl",
+                              (process.env.NEXT_PUBLIC_EMAILJS_VERIFY_TEMPLATE_ID as string) || "template_edu_verify",
+                              {
+                                verification_code: res.code,
+                                recipient_email: res.eduEmail,
+                              },
+                              { publicKey: "To4xMN8D9pz4wwmq8" },
+                            );
+                          } catch {}
+                          toast.success(`Verification code re-sent to ${res.eduEmail}`);
+                        } catch (err: any) {
+                          toast.error(err?.message ?? "Failed to resend code");
+                        } finally {
+                          setIsSendingCode(false);
+                        }
+                      }}
+                      className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Resend
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium leading-6 text-gray-900">Enter code</label>
+                    <div className="mt-2 flex gap-3">
+                      <input
+                        type="text"
+                        value={verificationCodeInput}
+                        onChange={(e) => setVerificationCodeInput(e.target.value)}
+                        placeholder="6-digit code"
+                        className="block w-40 rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                      />
+                      <button
+                        type="button"
+                        disabled={isVerifyingCode || !verificationCodeInput}
+                        onClick={async () => {
+                          try {
+                            setIsVerifyingCode(true);
+                            await eduVerify.mutateAsync({ tutorId: user.user?.id ?? "", code: verificationCodeInput });
+                            toast.success("Your university email has been verified");
+                            setVerificationCodeInput("");
+                            void tutor.refetch();
+                          } catch (err: any) {
+                            toast.error(err?.message ?? "Invalid code");
+                          } finally {
+                            setIsVerifyingCode(false);
+                          }
+                        }}
+                        className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+                      >
+                        {isVerifyingCode ? "Verifying..." : "Verify"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            */}
 
             {/* Stripe Connect Setup Section */}
             <div className="mt-10 border-t border-gray-900/10 pt-10">
