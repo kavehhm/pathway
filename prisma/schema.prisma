@@ -1,0 +1,86 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider     = "postgresql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+model Availability {
+  id         String   @id @default(uuid())
+  visible    Boolean
+  startTime  DateTime?
+  endTime    DateTime?
+  userId     String
+  day        String
+  available  Boolean
+  timeRange  String?  @db.VarChar(255)
+  
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+
+model User {
+  id             String   @id @default(uuid())
+  username       String   @unique @default(cuid())
+  email          String   @default("None")
+  bio            String   @default("None")
+  clerkId        String   @unique
+  school         String   @default("None")
+  major          String   @default("None")
+  approved       Boolean  @default(false)
+  description    String   @default("None")
+  calendlyLink   String   @default("None")
+  reviewPoints   Int      @default(0)
+  gpa            Float    @default(0.0)
+  tutorInPerson  Boolean  @default(false)
+  reviewQuantity Int      @default(0)
+  country        String   @default("United States")
+  state          String   @default("California")
+  zipCode        Int      @default(00000)
+  firstName      String   @default("None")
+  lastName       String   @default("None")
+  imageSrc       String   @default("")
+  subjects       String[]
+  // courses        String[] @default([]) // Optional course list - TEMPORARILY COMMENTED OUT
+  hourlyRate     Int      @default(0)
+  meetingLink    String?  
+  timezone       String    @default("PST")
+  stripeAccountId String?  // Stripe Connect account ID
+  stripeAccountStatus String? // pending, active, restricted, etc.
+  firstSessionFree Boolean @default(false)
+
+  // .edu email verification fields
+  eduEmail                     String?   @db.VarChar(255)
+  eduVerified                  Boolean   @default(false)
+  eduVerificationCode          String?   @db.VarChar(10)
+  eduVerificationExpiresAt     DateTime?
+
+  availability Availability[]
+  bookings     Booking[]     @relation("TutorBookings")
+}
+
+model Booking {
+  id          String   @id @default(uuid())
+  tutorId     String   // clerkId of the tutor
+  date        DateTime
+  time        String
+  status      String   @default("confirmed") // confirmed, cancelled, completed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  free        Boolean  @default(false)
+  
+  tutor       User     @relation("TutorBookings", fields: [tutorId], references: [clerkId])
+
+  @@index([tutorId])
+  @@index([date])
+  @@unique([tutorId, date, time])
+}
