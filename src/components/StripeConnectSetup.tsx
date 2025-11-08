@@ -148,8 +148,8 @@ const StripeConnectSetup: React.FC<StripeConnectSetupProps> = ({ onSuccess }) =>
             Access Payment Portal
           </Link>
           <div className="text-sm text-gray-500 ">
-            <p>Platform fee: 20%</p>
-            <p>You receive: 80% of each session</p>
+            <p>Platform fee: 10%</p>
+            <p>You receive: 90% of each session</p>
           </div>
         </div>
       </div>
@@ -203,8 +203,8 @@ const StripeConnectSetup: React.FC<StripeConnectSetupProps> = ({ onSuccess }) =>
             </button>
           </div>
           <div className="mt-4 text-sm text-gray-500">
-            <p>Platform fee: 20%</p>
-            <p>You receive: 80% of each session</p>
+            <p>Platform fee: 10%</p>
+            <p>You receive: 90% of each session</p>
           </div>
         </div>
       </div>
@@ -231,8 +231,8 @@ const StripeConnectSetup: React.FC<StripeConnectSetupProps> = ({ onSuccess }) =>
       </button>
       
       <div className="mt-4 text-sm text-gray-500 text-center">
-        <p>Platform fee: 20%</p>
-        <p>You receive: 80% of each session</p>
+        <p>Platform fee: 10%</p>
+        <p>You receive: 90% of each session</p>
       </div>
     </div>
   );

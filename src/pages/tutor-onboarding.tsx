@@ -548,7 +548,7 @@ export default function Example() {
                     <span className="flex select-none items-center pr-3 text-gray-500 sm:text-sm">
                       You receive: $
                       {Math.round(
-                        ((hourlyRate ?? 0) * 0.8 + Number.EPSILON) * 100,
+                        ((hourlyRate ?? 0) * 0.9 + Number.EPSILON) * 100,
                       ) / 100}
                     </span>
                   </div>

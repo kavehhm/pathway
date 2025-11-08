@@ -507,8 +507,8 @@ export const postRouter = createTRPCRouter({
           throw new Error('Tutor payment account is not active');
         }
 
-        // Calculate platform fee (20% of the total amount)
-        const platformFee = Math.round(amount * 0.20);
+        // Calculate platform fee (10% of the total amount)
+        const platformFee = Math.round(amount * 0.10);
         const tutorAmount = amount - platformFee;
 
         console.log(`Payment breakdown: Total: $${amount/100}, Platform fee: $${platformFee/100}, Tutor receives: $${tutorAmount/100}`);
