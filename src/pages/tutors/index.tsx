@@ -15,7 +15,7 @@ const FILTER_SECTIONS = [
   { id: "school", name: "School" },
   { id: "major", name: "Major" },
   { id: "subject", name: "Subject" },
-  // { id: "course", name: "Course (Northwestern)" }, // TEMPORARILY COMMENTED OUT
+  { id: "course", name: "Course (Northwestern)" },
 ];
 
 const HERO_STATS = [
@@ -156,15 +156,15 @@ const TutorFilters = ({
   availableSchools,
   availableMajors,
   availableSubjects,
-  // availableCourses, // TEMPORARILY COMMENTED OUT
+  availableCourses,
   selectedSchools,
   selectedMajors,
   selectedSubjects,
-  // selectedCourses, // TEMPORARILY COMMENTED OUT
+  selectedCourseIds,
   setSelectedSchools,
   setSelectedMajors,
   setSelectedSubjects,
-  // setSelectedCourses, // TEMPORARILY COMMENTED OUT
+  setSelectedCourseIds,
   firstSessionFreeOnly,
   setFirstSessionFreeOnly,
   onReset,
@@ -172,15 +172,15 @@ const TutorFilters = ({
   availableSchools: string[];
   availableMajors: string[];
   availableSubjects: string[];
-  // availableCourses: string[]; // TEMPORARILY COMMENTED OUT
+  availableCourses: Array<{ id: string; courseId: string; courseName: string }>;
   selectedSchools: string[];
   selectedMajors: string[];
   selectedSubjects: string[];
-  // selectedCourses: string[]; // TEMPORARILY COMMENTED OUT
+  selectedCourseIds: string[];
   setSelectedSchools: (items: string[]) => void;
   setSelectedMajors: (items: string[]) => void;
   setSelectedSubjects: (items: string[]) => void;
-  // setSelectedCourses: (items: string[]) => void; // TEMPORARILY COMMENTED OUT
+  setSelectedCourseIds: (items: string[]) => void;
   firstSessionFreeOnly: boolean;
   setFirstSessionFreeOnly: (value: boolean) => void;
   onReset: () => void;
@@ -215,20 +215,38 @@ const TutorFilters = ({
         </div>
       );
     }
-    // TEMPORARILY COMMENTED OUT - Course (Northwestern)
-    // if (sectionName === "Course (Northwestern)") {
-    //   return (
-    //     <div className={wrapperClass}>
-    //       <PortalMultiselect
-    //         placeholder="Search Northwestern courses"
-    //         selectedValues={selectedCourses}
-    //         options={availableCourses}
-    //         onRemove={(selectedList) => setSelectedCourses(selectedList)}
-    //         onSelect={(selectedList) => setSelectedCourses(selectedList)}
-    //       />
-    //     </div>
-    //   );
-    // }
+    if (sectionName === "Course (Northwestern)") {
+      // Show only if Northwestern is selected
+      if (selectedSchools.includes("Northwestern University")) {
+        return (
+          <div className={wrapperClass}>
+            <PortalMultiselect
+              placeholder="Search Northwestern courses"
+              selectedValues={selectedCourseIds.map(id => {
+                const course = availableCourses.find(c => c.id === id);
+                return course ? `${course.courseId} - ${course.courseName}` : id;
+              })}
+              options={availableCourses.map(c => `${c.courseId} - ${c.courseName}`)}
+              onRemove={(selectedList) => {
+                const ids = selectedList.map(label => {
+                  const course = availableCourses.find(c => `${c.courseId} - ${c.courseName}` === label);
+                  return course?.id ?? label;
+                });
+                setSelectedCourseIds(ids);
+              }}
+              onSelect={(selectedList) => {
+                const ids = selectedList.map(label => {
+                  const course = availableCourses.find(c => `${c.courseId} - ${c.courseName}` === label);
+                  return course?.id ?? label;
+                });
+                setSelectedCourseIds(ids);
+              }}
+            />
+          </div>
+        );
+      }
+      return null;
+    }
     return (
       <div className={wrapperClass}>
         <PortalMultiselect
@@ -377,10 +395,15 @@ export default function TutorsPage() {
   const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
   const [selectedMajors, setSelectedMajors] = useState<string[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
-  // const [selectedCourses, setSelectedCourses] = useState<string[]>([]); // TEMPORARILY COMMENTED OUT
+  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
   const [firstSessionFreeOnly, setFirstSessionFreeOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  // const [northwesternCourses, setNorthwesternCourses] = useState<string[]>([]); // TEMPORARILY COMMENTED OUT
+  
+  // Query for Northwestern courses from database
+  const northwesternCoursesQuery = api.post.getCoursesBySchool.useQuery(
+    { school: "Northwestern University" },
+    { enabled: selectedSchools.includes("Northwestern University") }
+  );
 
   const initializedFromQuery = useRef(false);
 
@@ -428,7 +451,7 @@ export default function TutorsPage() {
 
     const schoolParams = parseParam(router.query.school);
     const majorParams = parseParam(router.query.major);
-    // const courseParams = parseParam(router.query.course); // TEMPORARILY COMMENTED OUT
+    const courseParams = parseParam(router.query.course);
     const queryParam =
       typeof router.query.q === "string" ? router.query.q.trim() : "";
 
@@ -438,9 +461,9 @@ export default function TutorsPage() {
     if (majorParams.length > 0) {
       setSelectedMajors(majorParams);
     }
-    // if (courseParams.length > 0) { // TEMPORARILY COMMENTED OUT
-    //   setSelectedCourses(courseParams);
-    // }
+    if (courseParams.length > 0) {
+      setSelectedCourseIds(courseParams);
+    }
     if (queryParam) {
       setSearchQuery(queryParam);
     }
@@ -467,7 +490,7 @@ export default function TutorsPage() {
     setSelectedSchools([]);
     setSelectedMajors([]);
     setSelectedSubjects([]);
-    // setSelectedCourses([]); // TEMPORARILY COMMENTED OUT
+    setSelectedCourseIds([]);
     setFirstSessionFreeOnly(false);
   };
 
@@ -521,15 +544,15 @@ export default function TutorsPage() {
                     availableSchools={availableSchools}
                     availableMajors={availableMajors}
                     availableSubjects={availableSubjects}
-                    // availableCourses={northwesternCourses} // TEMPORARILY COMMENTED OUT
+                    availableCourses={northwesternCoursesQuery.data ?? []}
                     selectedSchools={selectedSchools}
                     selectedMajors={selectedMajors}
                     selectedSubjects={selectedSubjects}
-                    // selectedCourses={selectedCourses} // TEMPORARILY COMMENTED OUT
+                    selectedCourseIds={selectedCourseIds}
                     setSelectedSchools={setSelectedSchools}
                     setSelectedMajors={setSelectedMajors}
                     setSelectedSubjects={setSelectedSubjects}
-                    // setSelectedCourses={setSelectedCourses} // TEMPORARILY COMMENTED OUT
+                    setSelectedCourseIds={setSelectedCourseIds}
                     firstSessionFreeOnly={firstSessionFreeOnly}
                     setFirstSessionFreeOnly={setFirstSessionFreeOnly}
                     onReset={() => {
@@ -626,15 +649,15 @@ export default function TutorsPage() {
                     availableSchools={availableSchools}
                     availableMajors={availableMajors}
                     availableSubjects={availableSubjects}
-                    // availableCourses={northwesternCourses} // TEMPORARILY COMMENTED OUT
+                    availableCourses={northwesternCoursesQuery.data ?? []}
                     selectedSchools={selectedSchools}
                     selectedMajors={selectedMajors}
                     selectedSubjects={selectedSubjects}
-                    // selectedCourses={selectedCourses} // TEMPORARILY COMMENTED OUT
+                    selectedCourseIds={selectedCourseIds}
                     setSelectedSchools={setSelectedSchools}
                     setSelectedMajors={setSelectedMajors}
                     setSelectedSubjects={setSelectedSubjects}
-                    // setSelectedCourses={setSelectedCourses} // TEMPORARILY COMMENTED OUT
+                    setSelectedCourseIds={setSelectedCourseIds}
                     firstSessionFreeOnly={firstSessionFreeOnly}
                     setFirstSessionFreeOnly={setFirstSessionFreeOnly}
                     onReset={resetFilters}
@@ -645,14 +668,14 @@ export default function TutorsPage() {
           </aside>
 
           <div className="rounded-[2.5rem] border border-white/70 bg-white/75 p-6 shadow-xl backdrop-blur">
-            <ProductList
-              selectedMajors={selectedMajors}
-              selectedSchools={selectedSchools}
-              selectedSubjects={selectedSubjects}
-              selectedCourses={[]} // TEMPORARILY EMPTY ARRAY
-              firstSessionFreeOnly={firstSessionFreeOnly}
-              searchQuery={searchQuery}
-            />
+                <ProductList
+                  selectedMajors={selectedMajors}
+                  selectedSchools={selectedSchools}
+                  selectedSubjects={selectedSubjects}
+                  selectedCourses={selectedCourseIds}
+                  firstSessionFreeOnly={firstSessionFreeOnly}
+                  searchQuery={searchQuery}
+                />
             </div>
           </section>
         </main>

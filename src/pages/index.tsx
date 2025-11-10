@@ -57,40 +57,22 @@ const ROLES = [
   { id: "enrolled", label: "Course search" },
 ];
 
-// Load Northwestern courses
-const NORTHWESTERN_COURSES = [
-  { id: "AFST 101-7", name: "College Seminar" },
-  { id: "AFST 101-8", name: "First-Year Writing Seminar" },
-  { id: "AFST 276-0", name: "African Literature in Translation" },
-  // Add more courses as needed - this will be loaded from CSV in production
-];
-
 export default function Home() {
   const router = useRouter();
   const [role, setRole] = useState<(typeof ROLES)[number]["id"]>("aspiring");
   const [schoolQuery, setSchoolQuery] = useState("");
   const [majorQuery, setMajorQuery] = useState("");
   const [courseQuery, setCourseQuery] = useState("");
-  const [northwesternCourses, setNorthwesternCourses] = useState<Array<{id: string, name: string}>>([]);
 
   const trimmedSchoolOptions = useMemo(() => schools.slice(0, 150), []);
   const trimmedMajorOptions = useMemo(() => majors.slice(0, 150), []);
   const approvedTutors = api.post.getAllApprovedTutors.useQuery({});
-
-  // Load Northwestern courses from CSV
-  useEffect(() => {
-    fetch('/course catalogs/northwestern_undergrad_courses_ALL.csv')
-      .then(response => response.text())
-      .then(csv => {
-        const lines = csv.split('\n');
-        const courses = lines.slice(1).map(line => {
-          const [courseId, courseName] = line.split(',');
-          return { id: courseId?.trim() ?? '', name: courseName?.trim() ?? '' };
-        }).filter(course => course.id && course.name);
-        setNorthwesternCourses(courses);
-      })
-      .catch(err => console.error('Failed to load courses:', err));
-  }, []);
+  
+  // Load Northwestern courses from database
+  const northwesternCoursesQuery = api.post.getCoursesBySchool.useQuery(
+    { school: "Northwestern University" },
+    { enabled: role === "enrolled" }
+  );
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -233,8 +215,8 @@ export default function Home() {
                   ))}
                 </datalist>
                 <datalist id="course-options">
-                  {northwesternCourses.map((course) => (
-                    <option key={course.id} value={`${course.id} - ${course.name}`} />
+                  {(northwesternCoursesQuery.data ?? []).map((course) => (
+                    <option key={course.id} value={`${course.courseId} - ${course.courseName}`} />
                   ))}
                 </datalist>
               </div>

@@ -39,12 +39,13 @@ export default function ProductList({
     selectedMajors,
     selectedSchools,
     selectedSubjects,
+    selectedCourses,
     firstSessionFreeOnly,
   });
 
   useEffect(() => {
     void tutors.refetch();
-  }, [selectedMajors, selectedSchools, selectedSubjects, firstSessionFreeOnly]);
+  }, [selectedMajors, selectedSchools, selectedSubjects, selectedCourses, firstSessionFreeOnly]);
 
   const filteredTutors = tutors.data
     ? tutors.data
@@ -54,18 +55,8 @@ export default function ProductList({
             fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
             person.username?.toLowerCase().includes(searchQuery.toLowerCase());
           
-          // TEMPORARILY COMMENTED OUT - Filter by courses if courses are selected
-          // let courseMatch = true;
-          // if (selectedCourses.length > 0) {
-          //   const personCourses = person.courses ?? [];
-          //   courseMatch = selectedCourses.some(selectedCourse => 
-          //     personCourses.some(personCourse => 
-          //       personCourse.toLowerCase().includes(selectedCourse.toLowerCase())
-          //     )
-          //   );
-          // }
-          
-          return nameMatch; // && courseMatch;
+          // Course filtering is now handled by the backend query
+          return nameMatch;
         })
         .sort((a, b) => {
           // Sort by number of paid bookings (descending)

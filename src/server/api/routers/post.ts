@@ -20,10 +20,24 @@ export const postRouter = createTRPCRouter({
         selectedSubjects: z.string().array().optional(),
         selectedSchools: z.string().array().optional(),
         firstSessionFreeOnly: z.boolean().optional(),
+        selectedCourses: z.string().array().optional(), // Array of course UUIDs
       }),
     )
-    .query(({ input, ctx }) => {
-      const { selectedMajors, selectedSubjects, selectedSchools, firstSessionFreeOnly } = input;
+    .query(async ({ input, ctx }) => {
+      const { selectedMajors, selectedSubjects, selectedSchools, firstSessionFreeOnly, selectedCourses } = input;
+
+      // If courses are selected, we need to filter tutors who teach those courses
+      const courseFilter = selectedCourses && selectedCourses.length > 0
+        ? {
+            tutoredCourses: {
+              some: {
+                courseId: {
+                  in: selectedCourses,
+                },
+              },
+            },
+          }
+        : {};
 
       return ctx.db.user.findMany({
         where: {
@@ -50,6 +64,8 @@ export const postRouter = createTRPCRouter({
             firstSessionFreeOnly === true
               ? { firstSessionFree: true }
               : {},
+            // Filter by courses
+            courseFilter,
             { stripeAccountStatus: 'active' },
           ],
         },
@@ -57,6 +73,11 @@ export const postRouter = createTRPCRouter({
           bookings: {
             where: {
               free: false, // Only count paid bookings
+            },
+          },
+          tutoredCourses: {
+            include: {
+              course: true,
             },
           },
         },
@@ -138,7 +159,7 @@ export const postRouter = createTRPCRouter({
         lastName: z.string().optional(),
         imageSrc: z.string().optional(),
         subjects: z.string().array().optional(),
-        // courses: z.string().array().optional(), // TEMPORARILY COMMENTED OUT
+        courseIds: z.string().array().optional(), // Array of course UUIDs
         hourlyRate: z.number().optional(),
         meetingLink: z.string().optional(),
         timezone: z.string().optional(),
@@ -172,7 +193,7 @@ export const postRouter = createTRPCRouter({
         lastName,
         imageSrc,
         subjects,
-        // courses, // TEMPORARILY COMMENTED OUT
+        courseIds,
         hourlyRate,
         meetingLink,
         timezone,
@@ -235,7 +256,31 @@ export const postRouter = createTRPCRouter({
           }
         })
 
-        
+        // Handle course updates if provided
+        if (courseIds !== undefined) {
+          // Get user's UUID from clerkId
+          const user = await ctx.db.user.findUnique({
+            where: { clerkId: id },
+            select: { id: true },
+          });
+
+          if (user) {
+            // Delete existing tutor courses
+            await ctx.db.tutorCourse.deleteMany({
+              where: { userId: user.id },
+            });
+
+            // Add new courses if any
+            if (courseIds.length > 0) {
+              await ctx.db.tutorCourse.createMany({
+                data: courseIds.map(courseId => ({
+                  userId: user.id,
+                  courseId,
+                })),
+              });
+            }
+          }
+        }
       
       return ctx.db.user.update({
         where: {
@@ -256,7 +301,6 @@ export const postRouter = createTRPCRouter({
           lastName,
           imageSrc,
           subjects,
-          // courses, // TEMPORARILY COMMENTED OUT
           hourlyRate,
           meetingLink,
           timezone,
@@ -861,5 +905,85 @@ export const postRouter = createTRPCRouter({
       }
     }),
 
+  // Get all courses for a specific school
+  getCoursesBySchool: publicProcedure
+    .input(z.object({ school: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.db.course.findMany({
+        where: {
+          school: input.school,
+        },
+        orderBy: {
+          courseId: 'asc',
+        },
+      });
+    }),
+
+  // Get all available schools with courses
+  getSchoolsWithCourses: publicProcedure.query(async ({ ctx }) => {
+    const schools = await ctx.db.course.groupBy({
+      by: ['school'],
+      _count: {
+        id: true,
+      },
+    });
+    return schools.map(s => ({ school: s.school, count: s._count.id }));
+  }),
+
+  // Add courses to a tutor's profile
+  addTutorCourses: publicProcedure
+    .input(
+      z.object({
+        userId: z.string(), // clerkId
+        courseIds: z.string().array(), // Array of course UUIDs
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // First, get the user's actual UUID from their clerkId
+      const user = await ctx.db.user.findUnique({
+        where: { clerkId: input.userId },
+        select: { id: true },
+      });
+
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // Delete existing tutor courses
+      await ctx.db.tutorCourse.deleteMany({
+        where: { userId: user.id },
+      });
+
+      // Add new courses
+      if (input.courseIds.length > 0) {
+        await ctx.db.tutorCourse.createMany({
+          data: input.courseIds.map(courseId => ({
+            userId: user.id,
+            courseId,
+          })),
+        });
+      }
+
+      return { success: true };
+    }),
+
+  // Get tutor's courses
+  getTutorCourses: publicProcedure
+    .input(z.string()) // clerkId
+    .query(async ({ ctx, input }) => {
+      const user = await ctx.db.user.findUnique({
+        where: { clerkId: input },
+        select: { 
+          id: true,
+          tutoredCourses: {
+            include: {
+              course: true,
+            },
+          },
+        },
+      });
+
+      return user?.tutoredCourses.map(tc => tc.course) ?? [];
+    }),
   
 });

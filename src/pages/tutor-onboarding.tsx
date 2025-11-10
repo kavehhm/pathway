@@ -48,6 +48,13 @@ export default function Example() {
   const user = useUser();
 
   const tutor = api.post.getTutor.useQuery(user.user?.id ?? "");
+  const tutorCourses = api.post.getTutorCourses.useQuery(user.user?.id ?? "", {
+    enabled: !!user.user?.id,
+  });
+  const availableCourses = api.post.getCoursesBySchool.useQuery(
+    { school: "Northwestern University" },
+    { enabled: school === "Northwestern University" }
+  );
   const [bio, setBio] = useState(tutor.data?.bio);
 
   const [username, setUsername] = useState(tutor.data?.username);
@@ -62,8 +69,7 @@ export default function Example() {
   const [zipCode, setZipCode] = useState(tutor.data?.zipCode);
   const [tutorInPerson, setTutorInPerson] = useState(tutor.data?.tutorInPerson);
   const [seletedSubjects, setSelectedSubjects] = useState(tutor.data?.subjects);
-  // const [selectedCourses, setSelectedCourses] = useState<string[]>(tutor.data?.courses ?? []); // TEMPORARILY COMMENTED OUT
-  // const [northwesternCourses, setNorthwesternCourses] = useState<Array<{ course_id: string; course_name: string }>>([]); // TEMPORARILY COMMENTED OUT
+  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
   const [hourlyRate, setHourlyRate] = useState(tutor.data?.hourlyRate);
   const [firstSessionFree, setFirstSessionFree] = useState(false);
   // const [availability, setAvailability] = useState("");
@@ -223,7 +229,6 @@ export default function Example() {
     setZipCode(tutor.data?.zipCode);
     setTutorInPerson(tutor.data?.tutorInPerson);
     setSelectedSubjects(tutor.data?.subjects);
-    // setSelectedCourses(tutor.data?.courses ?? []); // TEMPORARILY COMMENTED OUT
     setMeetingLink(tutor.data?.meetingLink);
     setFirstSessionFree(!!tutor.data?.firstSessionFree);
     // Only set timezone if it exists on tutor.data
@@ -242,7 +247,14 @@ export default function Example() {
     setEduEmailInput((tutor.data as any)?.eduEmail ?? "");
   }, [tutor.isFetchedAfterMount, tutor.data]);
 
-  // Load Northwestern courses data - TEMPORARILY COMMENTED OUT
+  // Load tutor's existing courses
+  useEffect(() => {
+    if (tutorCourses.data) {
+      setSelectedCourseIds(tutorCourses.data.map(c => c.id));
+    }
+  }, [tutorCourses.data]);
+
+  // Old CSV loading code - NO LONGER NEEDED
   // useEffect(() => {
   //   const loadCourses = async () => {
   //     try {
@@ -784,8 +796,8 @@ export default function Example() {
                   />
                 </div>
               </div>
-              {/* TEMPORARILY COMMENTED OUT - Northwestern Courses */}
-              {/* {school === "Northwestern University" && (
+              {/* Northwestern Courses */}
+              {school === "Northwestern University" && (
                 <div className="sm:col-span-full">
                   <label
                     htmlFor="courses"
@@ -796,25 +808,28 @@ export default function Example() {
                   </label>
                   <div className="mt-2">
                     <Multiselect
-                      selectedValues={selectedCourses.map(course => ({ label: course, value: course }))}
+                      selectedValues={selectedCourseIds.map(id => {
+                        const course = availableCourses.data?.find(c => c.id === id);
+                        return course ? { label: `${course.courseId} - ${course.courseName}`, value: course.id } : null;
+                      }).filter(Boolean)}
                       displayValue="label"
                       isObject={true}
                       onRemove={(selectedList) => {
-                        setSelectedCourses(selectedList.map((item: any) => item.value));
+                        setSelectedCourseIds(selectedList.map((item: any) => item.value));
                       }}
                       onSelect={(selectedList) => {
-                        setSelectedCourses(selectedList.map((item: any) => item.value));
+                        setSelectedCourseIds(selectedList.map((item: any) => item.value));
                       }}
-                      options={northwesternCourses.map(c => ({
-                        label: `${c.course_id} - ${c.course_name}`,
-                        value: `${c.course_id} - ${c.course_name}`
-                      }))}
+                      options={availableCourses.data?.map(c => ({
+                        label: `${c.courseId} - ${c.courseName}`,
+                        value: c.id
+                      })) ?? []}
                       placeholder="Select courses"
                       className="block w-full rounded-md border-0 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
                     />
                   </div>
                 </div>
-              )} */}
+              )}
               <div className="sm:col-span-2">
                 <label
                   htmlFor="country"
@@ -1518,7 +1533,7 @@ export default function Example() {
                 firstName: user.user?.firstName ?? "None",
                 lastName: user.user?.lastName ?? "None",
                 subjects: seletedSubjects,
-                // courses: selectedCourses, // TEMPORARILY COMMENTED OUT
+                courseIds: selectedCourseIds,
                 meetingLink: meetingLink ?? undefined,
                 timezone,
                 availability,

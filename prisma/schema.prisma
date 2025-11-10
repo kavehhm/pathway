@@ -50,7 +50,6 @@ model User {
   lastName       String   @default("None")
   imageSrc       String   @default("")
   subjects       String[]
-  // courses        String[] @default([]) // Optional course list - TEMPORARILY COMMENTED OUT
   hourlyRate     Int      @default(0)
   meetingLink    String?  
   timezone       String    @default("PST")
@@ -66,6 +65,7 @@ model User {
 
   availability Availability[]
   bookings     Booking[]     @relation("TutorBookings")
+  tutoredCourses TutorCourse[] @relation("TutorToCourses")
 }
 
 model Booking {
@@ -83,4 +83,32 @@ model Booking {
   @@index([tutorId])
   @@index([date])
   @@unique([tutorId, date, time])
+}
+
+model Course {
+  id          String   @id @default(uuid())
+  courseId    String   // e.g., "COMP_SCI 101"
+  courseName  String   // e.g., "Introduction to Computer Science"
+  school      String   // e.g., "Northwestern University"
+  createdAt   DateTime @default(now())
+  
+  tutors      TutorCourse[] @relation("CourseTutors")
+
+  @@unique([courseId, school])
+  @@index([school])
+  @@index([courseId])
+}
+
+model TutorCourse {
+  id        String   @id @default(uuid())
+  userId    String   // User's UUID
+  courseId  String   // Course UUID
+  createdAt DateTime @default(now())
+  
+  user      User     @relation("TutorToCourses", fields: [userId], references: [id])
+  course    Course   @relation("CourseTutors", fields: [courseId], references: [id])
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
 }
