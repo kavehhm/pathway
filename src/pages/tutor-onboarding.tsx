@@ -1370,7 +1370,7 @@ export default function Example() {
                 Payment Setup
               </h2>
               <p className="mt-1 text-sm leading-6 text-gray-600">
-                Setup your payment account to receive payments from students. You will receive 80% of each session payment.
+                Setup your payment account to receive payments from students. You will receive 90% of each session payment.
               </p>
               
               <div className="mt-6">

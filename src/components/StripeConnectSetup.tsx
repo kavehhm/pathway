@@ -219,7 +219,7 @@ const StripeConnectSetup: React.FC<StripeConnectSetupProps> = ({ onSuccess }) =>
       </h2>
       <p className="text-gray-600 mb-6 text-center">
         To receive payments from students, you need to setup your Stripe Connect account.
-        This allows you to receive 80% of each session payment directly to your bank account.
+        This allows you to receive 90% of each session payment directly to your bank account.
       </p>
       
       <button
