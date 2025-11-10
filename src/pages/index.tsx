@@ -68,10 +68,10 @@ export default function Home() {
   const trimmedMajorOptions = useMemo(() => majors.slice(0, 150), []);
   const approvedTutors = api.post.getAllApprovedTutors.useQuery({});
   
-  // Load Northwestern courses from database
+  // Load Northwestern courses from database - only when Northwestern is selected
   const northwesternCoursesQuery = api.post.getCoursesBySchool.useQuery(
     { school: "Northwestern University" },
-    { enabled: role === "enrolled" }
+    { enabled: role === "enrolled" && schoolQuery === "Northwestern University" }
   );
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -168,7 +168,7 @@ export default function Home() {
                           className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-200"
                         />
                       </label>
-                    ) : (
+                    ) : schoolQuery === "Northwestern University" ? (
                       <label className="flex flex-col gap-2">
                         <span className="text-sm font-medium text-slate-600">Course search</span>
                         <input
@@ -179,6 +179,13 @@ export default function Home() {
                           className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-200"
                         />
                       </label>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <span className="text-sm font-medium text-slate-600">Course search</span>
+                        <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-500">
+                          Select Northwestern University to search courses
+                        </div>
+                      </div>
                     )}
 
                     <div className="flex items-end">

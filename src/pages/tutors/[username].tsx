@@ -30,6 +30,9 @@ const User = () => {
 
   const tutor = api.post.getSingleTutor.useQuery(username as string);
   const bookingCount = api.post.getBookingCount.useQuery(tutor.data?.clerkId ?? "");
+  const tutorCourses = api.post.getTutorCourses.useQuery(tutor.data?.clerkId ?? "", {
+    enabled: !!tutor.data?.clerkId,
+  });
   const policies = [
     // Online tutoring badge removed to move booking card up
     // {
@@ -401,6 +404,30 @@ const User = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Courses Section */}
+              {tutorCourses.data && tutorCourses.data.length > 0 && (
+                <div className="mt-8 border-t border-gray-200 pt-8">
+                  <h2 className="text-sm font-medium text-gray-900">
+                    {tutor.data?.school} Courses
+                  </h2>
+
+                  <div className="prose prose-sm mt-4 text-gray-500">
+                    <div role="list" className="flex flex-wrap gap-3">
+                      {tutorCourses.data.map((course) => (
+                        <div
+                          className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-2 text-sm text-violet-700"
+                          key={course.id}
+                        >
+                          <span className="font-semibold">{course.courseId}</span>
+                          <span className="mx-2">·</span>
+                          <span>{course.courseName}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Policies */}
               <section

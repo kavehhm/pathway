@@ -462,14 +462,31 @@ export default function TutorsPage() {
       setSelectedMajors(majorParams);
     }
     if (courseParams.length > 0) {
-      setSelectedCourseIds(courseParams);
+      // Convert course strings to UUIDs if they're in "COURSE_ID - Course Name" format
+      if (northwesternCoursesQuery.data) {
+        const courseIds = courseParams.map(courseParam => {
+          // Check if it's already a UUID (from filter dropdown)
+          const existingCourse = northwesternCoursesQuery.data.find(c => c.id === courseParam);
+          if (existingCourse) return courseParam;
+          
+          // Otherwise, it's from the landing page in "COURSE_ID - Course Name" format
+          const course = northwesternCoursesQuery.data.find(c => 
+            `${c.courseId} - ${c.courseName}` === courseParam
+          );
+          return course?.id ?? courseParam;
+        }).filter(Boolean);
+        setSelectedCourseIds(courseIds);
+      } else {
+        // If courses aren't loaded yet, just set the raw params (will be converted when courses load)
+        setSelectedCourseIds(courseParams);
+      }
     }
     if (queryParam) {
       setSearchQuery(queryParam);
     }
 
     initializedFromQuery.current = true;
-  }, [router.isReady, router.query]);
+  }, [router.isReady, router.query, northwesternCoursesQuery.data]);
 
   const persona =
     typeof router.query.role === "string" ? router.query.role : undefined;

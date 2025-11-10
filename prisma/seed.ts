@@ -22,7 +22,7 @@ async function main() {
     .map(line => {
       // Handle CSV parsing with potential commas in quotes
       const match = line.match(/^"([^"]*?)","([^"]*?)"/);
-      if (match) {
+      if (match && match[1] && match[2]) {
         return {
           courseId: match[1].trim(),
           courseName: match[2].trim(),
@@ -30,7 +30,7 @@ async function main() {
       }
       // Fallback for simple comma-separated
       const [courseId, courseName] = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
-      return { courseId, courseName };
+      return { courseId: courseId ?? '', courseName: courseName ?? '' };
     })
     .filter(course => course.courseId && course.courseName);
 

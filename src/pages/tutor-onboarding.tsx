@@ -51,14 +51,16 @@ export default function Example() {
   const tutorCourses = api.post.getTutorCourses.useQuery(user.user?.id ?? "", {
     enabled: !!user.user?.id,
   });
-  const availableCourses = api.post.getCoursesBySchool.useQuery(
-    { school: "Northwestern University" },
-    { enabled: school === "Northwestern University" }
-  );
   const [bio, setBio] = useState(tutor.data?.bio);
 
   const [username, setUsername] = useState(tutor.data?.username);
   const [school, setSchool] = useState(tutor.data?.school);
+  
+  // Query for available courses - must be after school state declaration
+  const availableCourses = api.post.getCoursesBySchool.useQuery(
+    { school: "Northwestern University" },
+    { enabled: school === "Northwestern University" }
+  );
   const [major, setMajor] = useState(tutor.data?.major);
   const [approved, setApproved] = useState(tutor.data?.approved);
   const [description, setDescription] = useState(tutor.data?.description);
@@ -814,11 +816,11 @@ export default function Example() {
                       }).filter(Boolean)}
                       displayValue="label"
                       isObject={true}
-                      onRemove={(selectedList) => {
-                        setSelectedCourseIds(selectedList.map((item: any) => item.value));
+                      onRemove={(selectedList: Array<{ label: string; value: string }>) => {
+                        setSelectedCourseIds(selectedList.map((item) => item.value));
                       }}
-                      onSelect={(selectedList) => {
-                        setSelectedCourseIds(selectedList.map((item: any) => item.value));
+                      onSelect={(selectedList: Array<{ label: string; value: string }>) => {
+                        setSelectedCourseIds(selectedList.map((item) => item.value));
                       }}
                       options={availableCourses.data?.map(c => ({
                         label: `${c.courseId} - ${c.courseName}`,
