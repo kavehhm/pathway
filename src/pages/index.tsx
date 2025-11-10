@@ -114,12 +114,12 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Pathway | Tutors from Your Dream School</title>
+        <title>Pathway</title>
         <meta
           name="description"
           content="Match with verified peer mentors from top universities by school, major, or course. Pathway makes it effortless to find the tutor who already thrives where you want to go."
         />
-        <link rel="icon" href="/ourlogowhite.png" />
+        <link rel="icon" href="/ourlogo720.png" />
       </Head>
       <div className="relative min-h-screen">
         <main className="relative mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 lg:px-8">

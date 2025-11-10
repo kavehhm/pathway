@@ -129,7 +129,7 @@ const User = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-100/30 via-white/70 to-purple-100/30 py-12">
+    <div className="min-h-screen py-12">
       <div className="mt-8 pb-24 pt-6 sm:pb-0">
         {/* <nav aria-label="Breadcrumb" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <ol role="list" className="flex items-center space-x-4">
