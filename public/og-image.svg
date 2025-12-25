@@ -1,0 +1,22 @@
+<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+  <!-- Purple gradient background -->
+  <defs>
+    <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a78bfa;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#purpleGradient)"/>
+  
+  <!-- White rounded rectangle for logo -->
+  <rect x="350" y="215" width="200" height="200" rx="30" fill="white" opacity="0.95"/>
+  
+  <!-- Text content -->
+  <text x="600" y="305" font-family="system-ui, -apple-system, sans-serif" font-size="80" font-weight="700" fill="white" letter-spacing="-2">Pathway</text>
+  <text x="600" y="365" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="400" fill="white" opacity="0.95">Your dream school.</text>
+  <text x="600" y="405" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="400" fill="white" opacity="0.95">Your major. Your mentor.</text>
+</svg>
+

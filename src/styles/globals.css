@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+    scroll-behavior: smooth;
+    overscroll-behavior-y: contain;
+    min-height: 100%;
+}
+
+/* Purple-tinted gradient background on root to prevent seams and white flash */
+html {
+  min-height: 100%;
+  background: 
+    radial-gradient(1200px 600px at 90% -10%, rgba(123, 97, 255, 0.25), transparent 60%),
+    radial-gradient(800px 400px at 10% -10%, rgba(146, 164, 255, 0.25), transparent 60%),
+    linear-gradient(to bottom right, #ffffff 0%, #f3e8ff 50%, #ddd6fe 100%);
+  background-attachment: fixed;
+}
+
+body {
+  min-height: 100%;
+  background: transparent;
+}
+
+@keyframes fadeinup {
+  0% {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fadeinup {
+  animation: fadeinup 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
