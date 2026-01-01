@@ -31,6 +31,7 @@ import StripeConnectSetup from "~/components/StripeConnectSetup";
 import OnboardingProgressBar from "~/components/OnboardingProgressBar";
 import dayjs from 'dayjs';
 import emailjs from "@emailjs/browser";
+import PortalMultiselect from "~/components/PortalMultiselect";
 
 const BIO_LENGTH = 250;
 
@@ -80,6 +81,14 @@ export default function Example() {
   const [otherMajor, setOtherMajor] = useState("");
   const [meetingLink, setMeetingLink] = useState(tutor.data?.meetingLink);
   const [timezone, setTimezone] = useState('PST');
+  // Career / transfer tags
+  const [careerCompanies, setCareerCompanies] = useState<string[]>(tutor.data?.careerCompanies ?? []);
+  const [careerIsInternship, setCareerIsInternship] = useState<boolean>(tutor.data?.careerIsInternship ?? true);
+  const [isTransfer, setIsTransfer] = useState<boolean>(tutor.data?.isTransfer ?? false);
+
+  const companiesQuery = api.post.getAllCompanies.useQuery(undefined, {
+    staleTime: 1000 * 60 * 60,
+  });
   // .edu verification
   const [eduEmailInput, setEduEmailInput] = useState<string>("");
   const [verificationCodeInput, setVerificationCodeInput] = useState<string>("");
@@ -238,6 +247,9 @@ export default function Example() {
     setSelectedSubjects(tutor.data?.subjects);
     setMeetingLink(tutor.data?.meetingLink);
     setFirstSessionFree(!!tutor.data?.firstSessionFree);
+    setCareerCompanies((tutor.data as any)?.careerCompanies ?? []);
+    setCareerIsInternship((tutor.data as any)?.careerIsInternship ?? true);
+    setIsTransfer((tutor.data as any)?.isTransfer ?? false);
     // Only set timezone if it exists on tutor.data
     if ('timezone' in (tutor.data ?? {})) {
       setTimezone((tutor.data as any)?.timezone ?? 'PST');
@@ -261,11 +273,8 @@ export default function Example() {
   }, [tutor.isFetchedAfterMount, tutor.data]);
 
   // Load tutor's existing courses
-  useEffect(() => {
-    if (tutorCourses.data) {
-      setSelectedCourseIds(tutorCourses.data.map(c => c.id));
-    }
-  }, [tutorCourses.data]);
+  // NOTE: initial selection is synced as part of the hydration snapshot logic below
+  // to avoid showing the "unsaved changes" banner on first load.
 
   // Old CSV loading code - NO LONGER NEEDED
   // useEffect(() => {
@@ -419,6 +428,9 @@ export default function Example() {
       timezone: normalizeString(timezone),
       availability: normalizeAvailability(availability),
       firstSessionFree: !!firstSessionFree,
+      careerCompanies: normalizeStringArray(careerCompanies),
+      careerIsInternship: !!careerIsInternship,
+      isTransfer: !!isTransfer,
     });
   };
 
@@ -428,12 +440,31 @@ export default function Example() {
     if (!tutor.isFetchedAfterMount || !tutor.data) return;
     // Wait until tutorCourses has resolved at least once (could be empty array)
     if (tutorCourses.data === undefined) return;
+    // Wait until our local state has been populated from tutor.data
+    // (otherwise snapshot may be taken before setState runs and we'll falsely detect changes).
+    if (isInitialLoad) return;
     if (hydrationComplete) return;
+
+    // Ensure derived state (selectedCourseIds) is synced before taking the baseline snapshot.
+    // This prevents the banner from appearing on first open.
+    const courseIdsFromDb = (tutorCourses.data ?? []).map((c) => c.id).sort();
+    const currentCourseIds = (selectedCourseIds ?? []).slice().sort();
+    if (courseIdsFromDb.join("|") !== currentCourseIds.join("|")) {
+      setSelectedCourseIds(courseIdsFromDb);
+      return;
+    }
 
     setHydrationComplete(true);
     initialSnapshotRef.current = makeSnapshot();
     setHasUnsavedChanges(false);
-  }, [tutor.isFetchedAfterMount, tutor.data, tutorCourses.data, hydrationComplete]);
+  }, [
+    tutor.isFetchedAfterMount,
+    tutor.data,
+    tutorCourses.data,
+    hydrationComplete,
+    isInitialLoad,
+    selectedCourseIds,
+  ]);
 
   // Track changes to fields to detect unsaved changes (only after hydration)
   useEffect(() => {
@@ -462,6 +493,9 @@ export default function Example() {
     timezone,
     availability,
     firstSessionFree,
+    careerCompanies,
+    careerIsInternship,
+    isTransfer,
   ]);
 
   // Main updateUser mutation for the button (no redirect - stays on page)
@@ -527,6 +561,9 @@ export default function Example() {
         meetingLink: tutor.data.meetingLink ?? undefined,
         timezone: tutor.data.timezone,
         availability: tutor.data.availability,
+        careerCompanies: tutor.data.careerCompanies ?? [],
+        careerIsInternship: tutor.data.careerIsInternship ?? true,
+        isTransfer: tutor.data.isTransfer ?? false,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -849,20 +886,21 @@ export default function Example() {
                   )}
                 </label>
                 <div className="mt-2">
-                  <select
-                    id="country"
-                    name="country"
-                    className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:max-w-xs sm:text-sm sm:leading-6"
-                    value={major}
-                    onChange={(e) => setMajor(e.target.value)}
-                  >
-                    <option selected>{major ?? "None"}</option>
-
-                    {majors.map((major) => (
-                      <option key={school}>{major}</option>
-                    ))}
-                    <option>Other</option>
-                  </select>
+                  <div className="max-w-xs rounded-md bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600">
+                    <PortalMultiselect
+                      placeholder="Search majors"
+                      selectedValues={major ? [major] : []}
+                      options={[...majors, "Other"]}
+                      maxSelected={1}
+                      allowCustom
+                      variant="plain"
+                      onChange={(items) => {
+                        const next = items[0] ?? "";
+                        setMajor(next);
+                        if (next !== "Other") setOtherMajor("");
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
               {major == "Other" && (
@@ -955,29 +993,110 @@ export default function Example() {
                     <span className="text-xs text-gray-500">Optional - Select courses you can teach</span>
                   </label>
                   <div className="mt-2">
-                    <Multiselect
-                      selectedValues={selectedCourseIds.map(id => {
-                        const course = availableCourses.data?.find(c => c.id === id);
-                        return course ? { label: `${course.courseId} - ${course.courseName}`, value: course.id } : null;
-                      }).filter(Boolean)}
-                      displayValue="label"
-                      isObject={true}
-                      onRemove={(selectedList: Array<{ label: string; value: string }>) => {
-                        setSelectedCourseIds(selectedList.map((item) => item.value));
-                      }}
-                      onSelect={(selectedList: Array<{ label: string; value: string }>) => {
-                        setSelectedCourseIds(selectedList.map((item) => item.value));
-                      }}
-                      options={availableCourses.data?.map(c => ({
-                        label: `${c.courseId} - ${c.courseName}`,
-                        value: c.id
-                      })) ?? []}
-                      placeholder="Select courses"
-                      className="block w-full rounded-md border-0 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                    />
+                    <div className="rounded-md bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600">
+                      <PortalMultiselect
+                        placeholder="Search Northwestern courses"
+                        selectedValues={selectedCourseIds
+                          .map((id) => {
+                            const course = availableCourses.data?.find((c) => c.id === id);
+                            return course ? `${course.courseId} - ${course.courseName}` : id;
+                          })
+                          .filter(Boolean)}
+                        options={(availableCourses.data ?? []).map(
+                          (c) => `${c.courseId} - ${c.courseName}`,
+                        )}
+                        variant="plain"
+                        onChange={(labels) => {
+                          const ids = labels.map((label) => {
+                            const course = availableCourses.data?.find(
+                              (c) => `${c.courseId} - ${c.courseName}` === label,
+                            );
+                            return course?.id ?? label;
+                          });
+                          setSelectedCourseIds(ids);
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
+
+              {/* Career advice + admissions tags */}
+              <div className="sm:col-span-full">
+                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">Career advice</p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Select companies you can speak about. Students will filter by company.
+                      </p>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={careerIsInternship}
+                        onChange={(e) => setCareerIsInternship(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+                      />
+                      Internship experience
+                    </label>
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <div className="flex-1">
+                      <span className="block text-sm font-medium text-gray-900">Companies</span>
+                      <div className="mt-2 rounded-md bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600">
+                        <PortalMultiselect
+                          placeholder="Search companies (type to filter)"
+                          selectedValues={careerCompanies}
+                          options={companiesQuery.data ?? []}
+                          allowCustom
+                          variant="plain"
+                          onChange={(items) => setCareerCompanies(items)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {careerCompanies.length > 0 && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {careerCompanies.map((company) => (
+                        <span
+                          key={company}
+                          className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-200"
+                        >
+                          {company}
+                          <button
+                            type="button"
+                            onClick={() => setCareerCompanies(careerCompanies.filter((c) => c !== company))}
+                            className="text-indigo-500 hover:text-indigo-700"
+                            aria-label={`Remove ${company}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="sm:col-span-full">
+                <label className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4">
+                  <input
+                    type="checkbox"
+                    checked={isTransfer}
+                    onChange={(e) => setIsTransfer(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+                  />
+                  <span className="flex flex-col">
+                    <span className="text-sm font-semibold text-gray-900">Transfer student</span>
+                    <span className="text-xs text-gray-500">
+                      Check this if you transferred into your current school/program (students can filter for transfers).
+                    </span>
+                  </span>
+                </label>
+              </div>
               <div className="sm:col-span-2">
                 <label
                   htmlFor="country"
@@ -1682,6 +1801,9 @@ export default function Example() {
                   timezone,
                   availability,
                   firstSessionFree,
+                  careerCompanies,
+                  careerIsInternship,
+                  isTransfer,
                 });
               }}
             >
@@ -1690,15 +1812,25 @@ export default function Example() {
           </div>
         </div>
 
-        {/* Reminder to save changes - Bottom Right */}
+        {/* Reminder to save changes (mobile-friendly banner) */}
         {hasUnsavedChanges && (
-          <div className="fixed bottom-8 right-8 z-30">
-            <div className="bg-yellow-100 border-2 border-yellow-400 rounded-lg px-6 py-3 shadow-xl max-w-xs">
-              <div className="flex items-center gap-3">
-                <svg className="w-5 h-5 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          <div className="fixed bottom-4 left-4 right-4 z-30 sm:bottom-8 sm:left-auto sm:right-8 sm:w-auto">
+            <div className="bg-yellow-100 border border-yellow-300 rounded-lg px-4 py-3 shadow-xl sm:max-w-xs">
+              <div className="flex items-start gap-3">
+                <svg
+                  className="mt-0.5 w-5 h-5 text-yellow-600 flex-shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+                  />
                 </svg>
-                <p className="text-sm font-semibold text-yellow-800">
+                <p className="text-sm font-semibold text-yellow-800 leading-snug">
                   Don&apos;t forget to click &quot;Update Profile&quot; to save your changes!
                 </p>
               </div>

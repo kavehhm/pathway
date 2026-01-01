@@ -12,8 +12,6 @@ import Image from "next/image";
 import logo from '../../public/ourlogo.png'
 import Link from "next/link";
 import { useRouter } from "next/router";
-import "aos/dist/aos.css";
-import AOS from "aos";
 import { useEffect, useState } from "react";
 import { useClerk, UserButton, useSession, useUser } from "@clerk/nextjs";
 import { api } from "~/utils/api";
@@ -35,9 +33,7 @@ export default function NewNav() {
   });
 
   
-  useEffect(() => {
-    AOS.init({ duration: 1000 });
-  }, []); 
+  // Keep navbar always visible (no scroll-trigger animations).
   const router = useRouter();
   const url = router.pathname;
   const navigation = [
@@ -131,7 +127,6 @@ export default function NewNav() {
     <header className="sticky top-0 z-[100]">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <Disclosure
-          data-aos="fade-down"
           as="nav"
           className="relative isolate"
         >
@@ -160,10 +155,11 @@ export default function NewNav() {
                     Log in
                   </button>
                   <button
+                    type="button"
                     onClick={() => openSignUp()}
-                    className="text-sm font-semibold leading-6 text-slate-700 hover:text-slate-900"
+                    className="inline-flex items-center rounded-xl px-2 py-3 text-sm font-semibold text-slate-700 hover:text-slate-900"
                   >
-                    Become a tutor <span aria-hidden="true">&rarr;</span>
+                    Sign up <span aria-hidden="true">&rarr;</span>
                   </button>
                 </div>
               )}

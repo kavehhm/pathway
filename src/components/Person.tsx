@@ -15,9 +15,8 @@ type TutorCardPerson = {
 const SCHOOL_LOGOS: Record<string, string> = {
   ucla: "/ucla.png",
   "universityofcalifornialosangeles": "/ucla.png",
-  "ucberkeley": "/berkeley.png",
-  "universityofcaliforniaberkeley": "/berkeley.png",
-  berkeley: "/berkeley.png",
+  "cornelluniversity": "/cornell.png",
+  cornell: "/cornell.png",
   northwestern: "/northwestern.png",
   "northwesternuniversity": "/northwestern.png",
   brown: "/brown.png",

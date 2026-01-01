@@ -1,5 +1,7 @@
 import { z } from "zod";
 import Stripe from "stripe";
+import { promises as fs } from "fs";
+import path from "path";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 
@@ -7,6 +9,41 @@ import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
   apiVersion: "2025-06-30.basil",
 });
+
+let cachedCompanies: string[] | null = null;
+let cachedCompaniesMtimeMs: number | null = null;
+async function getCompaniesFromCsv() {
+  // In development we want edits to `public/companies_1000.csv` to reflect immediately.
+  const isDev = process.env.NODE_ENV !== "production";
+
+  const filePath = path.join(process.cwd(), "public", "companies_1000.csv");
+  if (!isDev) {
+    try {
+      const stat = await fs.stat(filePath);
+      if (cachedCompanies && cachedCompaniesMtimeMs === stat.mtimeMs) {
+        return cachedCompanies;
+      }
+      cachedCompaniesMtimeMs = stat.mtimeMs;
+    } catch {
+      // fall through; readFile will throw a clearer error if missing
+    }
+  }
+
+  const raw = await fs.readFile(filePath, "utf8");
+  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+  // CSV is single-column: header `company_name`, then one company per line.
+  const companies = lines
+    .slice(1)
+    .map((line) => line.replace(/^"|"$/g, "").trim())
+    .filter(Boolean);
+
+  const parsed = Array.from(new Set(companies)).sort((a, b) => a.localeCompare(b));
+
+  // Cache only outside of dev.
+  if (!isDev) cachedCompanies = parsed;
+  return parsed;
+}
 
 export const postRouter = createTRPCRouter({
   getAllConsoleTutors: publicProcedure.query(({ ctx }) => {
@@ -23,10 +60,24 @@ export const postRouter = createTRPCRouter({
         selectedCourses: z.string().array().optional(), // Array of course UUIDs
         minPrice: z.number().optional(),
         maxPrice: z.number().optional(),
+        selectedCompanies: z.string().array().optional(),
+        careerIsInternship: z.boolean().optional(),
+        transferOnly: z.boolean().optional(),
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { selectedMajors, selectedSubjects, selectedSchools, firstSessionFreeOnly, selectedCourses, minPrice, maxPrice } = input;
+      const {
+        selectedMajors,
+        selectedSubjects,
+        selectedSchools,
+        firstSessionFreeOnly,
+        selectedCourses,
+        minPrice,
+        maxPrice,
+        selectedCompanies,
+        careerIsInternship,
+        transferOnly,
+      } = input;
 
       // If courses are selected, we need to filter tutors who teach those courses
       const courseFilter = selectedCourses && selectedCourses.length > 0
@@ -41,7 +92,7 @@ export const postRouter = createTRPCRouter({
           }
         : {};
 
-      return ctx.db.user.findMany({
+      const tutors = await ctx.db.user.findMany({
         where: {
           AND: [
             // Filter by selected majors
@@ -75,6 +126,17 @@ export const postRouter = createTRPCRouter({
                   },
                 }
               : {},
+            // Filter by career company + internship/full-time
+            selectedCompanies && selectedCompanies.length > 0
+              ? {
+                  careerCompanies: {
+                    hasSome: selectedCompanies,
+                  },
+                  ...(careerIsInternship !== undefined ? { careerIsInternship } : {}),
+                }
+              : {},
+            // Filter by transfer mentors (if checked)
+            transferOnly === true ? { isTransfer: true } : {},
             // Filter by courses
             courseFilter,
             { stripeAccountStatus: 'active' },
@@ -93,6 +155,8 @@ export const postRouter = createTRPCRouter({
           },
         },
       });
+
+      return tutors;
     }),
 
   getTutor: publicProcedure.input(z.string()).query(({ ctx, input }) => {
@@ -174,6 +238,9 @@ export const postRouter = createTRPCRouter({
         hourlyRate: z.number().optional(),
         meetingLink: z.string().optional(),
         timezone: z.string().optional(),
+        careerCompanies: z.string().array().optional(),
+        careerIsInternship: z.boolean().optional(),
+        isTransfer: z.boolean().optional(),
         availability:  z.array(
           z.object({
             day: z.string(),
@@ -315,6 +382,9 @@ export const postRouter = createTRPCRouter({
           hourlyRate,
           meetingLink,
           timezone,
+          ...(input.careerCompanies !== undefined ? { careerCompanies: input.careerCompanies } : {}),
+          ...(input.careerIsInternship !== undefined ? { careerIsInternship: input.careerIsInternship } : {}),
+          ...(input.isTransfer !== undefined ? { isTransfer: input.isTransfer } : {}),
           availability: {
             connect: availabilities
           },
@@ -390,6 +460,55 @@ export const postRouter = createTRPCRouter({
       },
     });
   }),
+
+  getAllCompanies: publicProcedure.query(async () => {
+    return await getCompaniesFromCsv();
+  }),
+
+  getAllTutorCompanies: publicProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.db.user.findMany({
+      where: { stripeAccountStatus: "active" },
+      select: { careerCompanies: true },
+    });
+
+    const unique = new Set<string>();
+    rows.forEach((row) => {
+      (row.careerCompanies ?? []).forEach((c) => {
+        if (typeof c === "string" && c.trim()) unique.add(c.trim());
+      });
+    });
+
+    return Array.from(unique).sort((a, b) => a.localeCompare(b));
+  }),
+
+  getAvailableCoursesForSchool: publicProcedure
+    .input(z.object({ school: z.string().min(1) }))
+    .query(async ({ input, ctx }) => {
+      const rows = await ctx.db.tutorCourse.findMany({
+        where: {
+          user: {
+            stripeAccountStatus: "active",
+            school: input.school,
+          },
+        },
+        include: {
+          course: true,
+        },
+        distinct: ["courseId"],
+      });
+
+      return rows
+        .map((r) => r.course)
+        .filter(Boolean)
+        .map((c) => ({
+          id: c.id,
+          courseId: c.courseId,
+          courseName: c.courseName,
+        }))
+        .sort((a, b) =>
+          `${a.courseId} - ${a.courseName}`.localeCompare(`${b.courseId} - ${b.courseName}`),
+        );
+    }),
 
   // .edu email verification
   eduStartVerification: publicProcedure

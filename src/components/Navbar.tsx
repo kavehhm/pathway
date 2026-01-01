@@ -135,12 +135,12 @@ const Navbar = () => {
              <button onClick={()=>openSignIn({afterSignUpUrl: '/', afterSignInUrl: '/'})} className="text-lg bg-blue-600 whitespace-nowrap py-3 px-4 text-white rounded-2xl hover:underline font-semibold leading-6 ">
                 Log in
               </button>
-            <button
-              onClick={() => openSignUp({afterSignUpUrl: '/', afterSignInUrl: '/'})}
-              className=" font-semibold whitespace-nowrap hover:underline leading-6 text-gray-900 text-lg"
+            <Link
+              href="/mentors"
+              className="font-semibold whitespace-nowrap hover:underline leading-6 text-gray-900 text-lg"
             >
-              Become a tutor <span aria-hidden="true">&rarr;</span>
-            </button>
+              Become a mentor <span aria-hidden="true">&rarr;</span>
+            </Link>
             </div>
           )}
         </div>
@@ -217,12 +217,13 @@ const Navbar = () => {
                   <button onClick={()=>openSignIn()} className="-mx-3 w-full text-left block w rounded-lg px-3 py-2.5 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50">
                    Log in
                 </button>
-                  <button
-                    onClick={() => openSignIn()}
+                  <Link
+                    href="/mentors"
                     className="-mx-3 block rounded-lg px-3 py-2.5  w-full text-left text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
+                    onClick={() => setMobileMenuOpen(false)}
                   >
-                    Become a tutor <span aria-hidden="true">&rarr;</span>
-                  </button>
+                    Become a mentor <span aria-hidden="true">&rarr;</span>
+                  </Link>
                   </div>
                 )}
               </div>

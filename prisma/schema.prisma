@@ -1,5 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider     = "postgresql"
@@ -7,97 +8,90 @@ datasource db {
   relationMode = "prisma"
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
-
 model Availability {
-  id         String   @id @default(uuid())
-  visible    Boolean
-  startTime  DateTime?
-  endTime    DateTime?
-  userId     String
-  day        String
-  available  Boolean
-  timeRange  String?  @db.VarChar(255)
-  
-  user       User     @relation(fields: [userId], references: [id])
+  id        String    @id @default(uuid())
+  visible   Boolean
+  userId    String
+  day       String
+  available Boolean
+  timeRange String?   @db.VarChar(255)
+  endTime   DateTime?
+  startTime DateTime?
+  user      User      @relation(fields: [userId], references: [id])
 
   @@index([userId])
 }
 
-
 model User {
-  id             String   @id @default(uuid())
-  username       String   @unique @default(cuid())
-  email          String   @default("None")
-  bio            String   @default("None")
-  clerkId        String   @unique
-  school         String   @default("None")
-  major          String   @default("None")
-  approved       Boolean  @default(false)
-  description    String   @default("None")
-  calendlyLink   String   @default("None")
-  reviewPoints   Int      @default(0)
-  gpa            Float    @default(0.0)
-  tutorInPerson  Boolean  @default(false)
-  reviewQuantity Int      @default(0)
-  country        String   @default("United States")
-  state          String   @default("California")
-  zipCode        Int      @default(00000)
-  firstName      String   @default("None")
-  lastName       String   @default("None")
-  imageSrc       String   @default("")
-  subjects       String[]
-  hourlyRate     Int      @default(0)
-  meetingLink    String?  
-  timezone       String    @default("PST")
-  stripeAccountId String?  // Stripe Connect account ID
-  stripeAccountStatus String? // pending, active, restricted, etc.
-  firstSessionFree Boolean @default(false)
-
-  // .edu email verification fields
-  eduEmail                     String?   @db.VarChar(255)
-  eduVerified                  Boolean   @default(false)
-  eduVerificationCode          String?   @db.VarChar(10)
-  eduVerificationExpiresAt     DateTime?
-
-  availability Availability[]
-  bookings     Booking[]     @relation("TutorBookings")
-  tutoredCourses TutorCourse[] @relation("TutorToCourses")
-  reviewsReceived Review[]    @relation("TutorReviews")
-  reviewsGiven    Review[]    @relation("StudentReviews")
+  id                       String         @id @default(uuid())
+  username                 String         @unique @default(cuid())
+  email                    String         @default("None")
+  bio                      String         @default("None")
+  clerkId                  String         @unique
+  school                   String         @default("None")
+  major                    String         @default("None")
+  approved                 Boolean        @default(false)
+  description              String         @default("None")
+  calendlyLink             String         @default("None")
+  reviewPoints             Int            @default(0)
+  gpa                      Float          @default(0.0)
+  tutorInPerson            Boolean        @default(false)
+  reviewQuantity           Int            @default(0)
+  country                  String         @default("United States")
+  state                    String         @default("California")
+  zipCode                  Int            @default(0)
+  firstName                String         @default("None")
+  lastName                 String         @default("None")
+  imageSrc                 String         @default("")
+  subjects                 String[]
+  hourlyRate               Int            @default(0)
+  meetingLink              String?
+  timezone                 String         @default("PST")
+  stripeAccountId          String?
+  stripeAccountStatus      String?
+  firstSessionFree         Boolean        @default(false)
+  eduEmail                 String?        @db.VarChar(255)
+  eduVerificationCode      String?        @db.VarChar(10)
+  eduVerificationExpiresAt DateTime?
+  eduVerified              Boolean        @default(false)
+  isTutor                  Boolean        @default(false)
+  // Career / admissions experience tags (used for search)
+  careerCompanies          String[]       @default([])
+  careerIsInternship       Boolean        @default(true)
+  isTransfer               Boolean        @default(false)
+  availability             Availability[]
+  bookings                 Booking[]      @relation("TutorBookings")
+  tutoredCourses           TutorCourse[]  @relation("TutorToCourses")
+  reviewsReceived          Review[]       @relation("TutorReviews")
+  reviewsGiven             Review[]       @relation("StudentReviews")
 }
 
 model Booking {
-  id          String   @id @default(uuid())
-  tutorId     String   // clerkId of the tutor
-  studentClerkId String? // clerkId of the student who booked
-  date        DateTime
-  time        String
-  status      String   @default("confirmed") // confirmed, cancelled, completed
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  free        Boolean  @default(false)
-  
-  tutor       User     @relation("TutorBookings", fields: [tutorId], references: [clerkId])
-  review      Review?  @relation("BookingReview")
+  id             String   @id @default(uuid())
+  tutorId        String
+  date           DateTime
+  time           String
+  status         String   @default("confirmed")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  free           Boolean  @default(false)
+  studentClerkId String?
+  tutor          User     @relation("TutorBookings", fields: [tutorId], references: [clerkId])
+  review         Review?  @relation("BookingReview")
 
+  @@unique([tutorId, date, time])
   @@index([tutorId])
   @@index([date])
   @@index([studentClerkId])
-  @@unique([tutorId, date, time])
 }
 
 model Course {
-  id          String   @id @default(uuid())
-  courseId    String   // e.g., "COMP_SCI 101"
-  courseName  String   // e.g., "Introduction to Computer Science"
-  school      String   // e.g., "Northwestern University"
-  createdAt   DateTime @default(now())
-  
-  tutors      TutorCourse[] @relation("CourseTutors")
+  id         String        @id @default(uuid())
+  courseId   String
+  courseName String
+  school     String
+  createdAt  DateTime      @default(now())
+  tutors     TutorCourse[] @relation("CourseTutors")
 
   @@unique([courseId, school])
   @@index([school])
@@ -106,10 +100,9 @@ model Course {
 
 model TutorCourse {
   id        String   @id @default(uuid())
-  userId    String   // User's UUID
-  courseId  String   // Course UUID
+  userId    String
+  courseId  String
   createdAt DateTime @default(now())
-  
   user      User     @relation("TutorToCourses", fields: [userId], references: [id])
   course    Course   @relation("CourseTutors", fields: [courseId], references: [id])
 
@@ -119,19 +112,18 @@ model TutorCourse {
 }
 
 model Review {
-  id              String   @id @default(uuid())
-  bookingId       String   @unique // One review per booking
-  tutorClerkId    String   // Tutor being reviewed
-  studentClerkId  String   // Student who wrote the review
-  rating          Float    // 1.0 to 5.0 (supports half stars: 1.0, 1.5, 2.0, etc.)
-  reviewText      String?  @db.Text // Optional text review
-  tutorResponse   String?  @db.Text // Optional tutor response
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  booking         Booking  @relation("BookingReview", fields: [bookingId], references: [id])
-  tutor           User     @relation("TutorReviews", fields: [tutorClerkId], references: [clerkId])
-  student         User     @relation("StudentReviews", fields: [studentClerkId], references: [clerkId])
+  id             String   @id @default(uuid())
+  bookingId      String   @unique
+  tutorClerkId   String
+  studentClerkId String
+  rating         Float
+  reviewText     String?
+  tutorResponse  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  booking        Booking  @relation("BookingReview", fields: [bookingId], references: [id])
+  tutor          User     @relation("TutorReviews", fields: [tutorClerkId], references: [clerkId])
+  student        User     @relation("StudentReviews", fields: [studentClerkId], references: [clerkId])
 
   @@index([bookingId])
   @@index([tutorClerkId])

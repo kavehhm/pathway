@@ -1,5 +1,4 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 
 import { Dialog, Disclosure, Transition } from "@headlessui/react";
 import { FunnelIcon, MinusIcon, PlusIcon } from "@heroicons/react/20/solid";
@@ -10,6 +9,7 @@ import { FaMagnifyingGlass } from "react-icons/fa6";
 import ProductList from "~/components/ProductList";
 import NewNav from "~/components/NewNav";
 import { api } from "~/utils/api";
+import PortalMultiselect from "~/components/PortalMultiselect";
 
 const FILTER_SECTIONS = [
   { id: "school", name: "School" },
@@ -17,6 +17,7 @@ const FILTER_SECTIONS = [
   { id: "subject", name: "Subject" },
   { id: "course", name: "Course (Northwestern)" },
   { id: "price", name: "Price Range" },
+  { id: "company", name: "Company" },
 ];
 
 const HERO_STATS = [
@@ -25,149 +26,30 @@ const HERO_STATS = [
   { label: "Avg reply time", value: "< 12 hrs" },
 ];
 
-// Custom multiselect component using portal
-function PortalMultiselect({
-  options,
-  selectedValues,
-  onSelect,
-  onRemove,
-  placeholder,
-}: {
-  options: string[];
-  selectedValues: string[];
-  onSelect: (items: string[]) => void;
-  onRemove: (items: string[]) => void;
-  placeholder: string;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const anchorRef = useRef<HTMLDivElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  const filteredOptions = useMemo(() => {
-    return options.filter(
-      (option) =>
-        option.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !selectedValues.includes(option)
-    );
-  }, [options, searchQuery, selectedValues]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        anchorRef.current &&
-        !anchorRef.current.contains(event.target as Node) &&
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen]);
-
-  const handleSelect = (option: string) => {
-    onSelect([...selectedValues, option]);
-    setSearchQuery("");
-  };
-
-  const handleRemove = (option: string) => {
-    onRemove(selectedValues.filter((v) => v !== option));
-  };
-
-  const dropdownContent = isOpen && anchorRef.current && (
-    <div
-      ref={dropdownRef}
-      style={{
-        position: "absolute",
-        top: anchorRef.current.getBoundingClientRect().bottom + window.scrollY + 4,
-        left: anchorRef.current.getBoundingClientRect().left + window.scrollX,
-        width: anchorRef.current.getBoundingClientRect().width,
-        zIndex: 99999,
-      }}
-      className="max-h-60 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl"
-    >
-      {filteredOptions.length > 0 ? (
-        filteredOptions.map((option) => (
-          <div
-            key={option}
-            onClick={() => handleSelect(option)}
-            className="cursor-pointer px-4 py-2.5 text-sm text-slate-700 transition hover:bg-violet-50"
-          >
-            {option}
-          </div>
-        ))
-      ) : (
-        <div className="px-4 py-2.5 text-sm text-slate-400">No options found</div>
-      )}
-    </div>
-  );
-
-  return (
-    <div ref={anchorRef} className="relative">
-      <div className="min-h-[38px] rounded-2xl bg-white">
-        <div className="flex flex-wrap gap-1.5 p-1">
-          {selectedValues.map((value) => (
-            <span
-              key={value}
-              className="inline-flex items-center gap-1 rounded-full bg-violet-600 px-3 py-1 text-xs font-medium text-white"
-            >
-              {value}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRemove(value);
-                }}
-                className="hover:text-violet-200"
-              >
-                ×
-              </button>
-            </span>
-          ))}
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onFocus={() => setIsOpen(true)}
-            placeholder={selectedValues.length === 0 ? placeholder : ""}
-            className="min-w-[120px] flex-1 border-0 bg-transparent px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
-          />
-          <button
-            type="button"
-            onClick={() => setIsOpen(!isOpen)}
-            className="px-2 text-slate-400 hover:text-slate-600"
-          >
-            ▼
-          </button>
-        </div>
-      </div>
-      {typeof window !== "undefined" && createPortal(dropdownContent, document.body)}
-    </div>
-  );
-}
+// Company list is sourced from `public/companies_1000.csv` via tRPC.
 
 const TutorFilters = ({
   availableSchools,
   availableMajors,
   availableSubjects,
   availableCourses,
+  availableCompanies,
   selectedSchools,
   selectedMajors,
   selectedSubjects,
   selectedCourseIds,
+  selectedCompanies,
   setSelectedSchools,
   setSelectedMajors,
   setSelectedSubjects,
   setSelectedCourseIds,
+  setSelectedCompanies,
   firstSessionFreeOnly,
   setFirstSessionFreeOnly,
+  careerIsInternship,
+  setCareerIsInternship,
+  transferOnly,
+  setTransferOnly,
   priceRange,
   setPriceRange,
   onReset,
@@ -176,16 +58,23 @@ const TutorFilters = ({
   availableMajors: string[];
   availableSubjects: string[];
   availableCourses: Array<{ id: string; courseId: string; courseName: string }>;
+  availableCompanies: string[];
   selectedSchools: string[];
   selectedMajors: string[];
   selectedSubjects: string[];
   selectedCourseIds: string[];
+  selectedCompanies: string[];
   setSelectedSchools: (items: string[]) => void;
   setSelectedMajors: (items: string[]) => void;
   setSelectedSubjects: (items: string[]) => void;
   setSelectedCourseIds: (items: string[]) => void;
+  setSelectedCompanies: (items: string[]) => void;
   firstSessionFreeOnly: boolean;
   setFirstSessionFreeOnly: (value: boolean) => void;
+  careerIsInternship: boolean;
+  setCareerIsInternship: (value: boolean) => void;
+  transferOnly: boolean;
+  setTransferOnly: (value: boolean) => void;
   priceRange: [number, number];
   setPriceRange: (range: [number, number]) => void;
   onReset: () => void;
@@ -201,8 +90,7 @@ const TutorFilters = ({
             placeholder="Select schools"
             selectedValues={selectedSchools}
             options={availableSchools}
-            onRemove={(selectedList) => setSelectedSchools(selectedList)}
-            onSelect={(selectedList) => setSelectedSchools(selectedList)}
+            onChange={(selectedList) => setSelectedSchools(selectedList)}
           />
         </div>
       );
@@ -214,8 +102,7 @@ const TutorFilters = ({
             placeholder="Select majors"
             selectedValues={selectedMajors}
             options={availableMajors}
-            onRemove={(selectedList) => setSelectedMajors(selectedList)}
-            onSelect={(selectedList) => setSelectedMajors(selectedList)}
+            onChange={(selectedList) => setSelectedMajors(selectedList)}
           />
         </div>
       );
@@ -232,14 +119,7 @@ const TutorFilters = ({
                 return course ? `${course.courseId} - ${course.courseName}` : id;
               })}
               options={availableCourses.map(c => `${c.courseId} - ${c.courseName}`)}
-              onRemove={(selectedList) => {
-                const ids = selectedList.map(label => {
-                  const course = availableCourses.find(c => `${c.courseId} - ${c.courseName}` === label);
-                  return course?.id ?? label;
-                });
-                setSelectedCourseIds(ids);
-              }}
-              onSelect={(selectedList) => {
+              onChange={(selectedList) => {
                 const ids = selectedList.map(label => {
                   const course = availableCourses.find(c => `${c.courseId} - ${c.courseName}` === label);
                   return course?.id ?? label;
@@ -297,14 +177,25 @@ const TutorFilters = ({
         </div>
       );
     }
+    if (sectionName === "Company") {
+      return (
+        <div className={wrapperClass}>
+          <PortalMultiselect
+            placeholder="Select companies"
+            selectedValues={selectedCompanies}
+            options={availableCompanies}
+            onChange={(selectedList) => setSelectedCompanies(selectedList)}
+          />
+        </div>
+      );
+    }
     return (
       <div className={wrapperClass}>
         <PortalMultiselect
           placeholder="Select subjects"
           selectedValues={selectedSubjects}
           options={availableSubjects}
-          onRemove={(selectedList) => setSelectedSubjects(selectedList)}
-          onSelect={(selectedList) => setSelectedSubjects(selectedList)}
+          onChange={(selectedList) => setSelectedSubjects(selectedList)}
         />
       </div>
     );
@@ -351,6 +242,36 @@ const TutorFilters = ({
           type="checkbox"
           checked={firstSessionFreeOnly}
           onChange={(event) => setFirstSessionFreeOnly(event.target.checked)}
+          className="h-5 w-5 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+        />
+      </label>
+
+      <label className="flex items-center justify-between rounded-3xl border border-white/70 bg-white/75 p-4 text-sm shadow-sm backdrop-blur">
+        <span className="flex flex-col gap-1">
+          <span className="font-semibold text-slate-700">Internship</span>
+          <span className="text-xs text-slate-500">
+            Toggle internship vs full-time career advice (applies to company filter)
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={careerIsInternship}
+          onChange={(event) => setCareerIsInternship(event.target.checked)}
+          className="h-5 w-5 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+        />
+      </label>
+
+      <label className="flex items-center justify-between rounded-3xl border border-white/70 bg-white/75 p-4 text-sm shadow-sm backdrop-blur">
+        <span className="flex flex-col gap-1">
+          <span className="font-semibold text-slate-700">Transfer mentors</span>
+          <span className="text-xs text-slate-500">
+            Only show mentors who transferred into their program
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={transferOnly}
+          onChange={(event) => setTransferOnly(event.target.checked)}
           className="h-5 w-5 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
         />
       </label>
@@ -407,6 +328,9 @@ export default function TutorsPage() {
   const schoolsQuery = api.post.getAllSchools.useQuery();
   const majorsQuery = api.post.getAllMajors.useQuery();
   const subjectsQuery = api.post.getAllSubjects.useQuery();
+  const companiesQuery = api.post.getAllTutorCompanies.useQuery(undefined, {
+    staleTime: 1000 * 60 * 60,
+  });
 
   const availableSchools = useMemo(() => {
     const unique = new Set<string>();
@@ -421,9 +345,7 @@ export default function TutorsPage() {
   const availableMajors = useMemo(() => {
     const unique = new Set<string>();
     majorsQuery.data?.forEach((item) => {
-      if (item.major) {
-        unique.add(item.major);
-      }
+      if (item.major) unique.add(item.major);
     });
     return Array.from(unique).sort((a, b) => a.localeCompare(b));
   }, [majorsQuery.data]);
@@ -442,6 +364,10 @@ export default function TutorsPage() {
     return Array.from(unique).sort((a, b) => a.localeCompare(b));
   }, [subjectsQuery.data]);
 
+  const availableCompanies = useMemo(() => {
+    return (companiesQuery.data ?? []).slice();
+  }, [companiesQuery.data]);
+
   const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
   const [selectedMajors, setSelectedMajors] = useState<string[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
@@ -449,11 +375,14 @@ export default function TutorsPage() {
   const [firstSessionFreeOnly, setFirstSessionFreeOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 100]);
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
+  const [careerIsInternship, setCareerIsInternship] = useState(true);
+  const [transferOnly, setTransferOnly] = useState(false);
   
-  // Query for Northwestern courses from database
-  const northwesternCoursesQuery = api.post.getCoursesBySchool.useQuery(
+  // Only show Northwestern courses that are actually offered by active tutors
+  const northwesternCoursesQuery = api.post.getAvailableCoursesForSchool.useQuery(
     { school: "Northwestern University" },
-    { enabled: selectedSchools.includes("Northwestern University") }
+    { enabled: selectedSchools.includes("Northwestern University") },
   );
 
   const initializedFromQuery = useRef(false);
@@ -503,6 +432,11 @@ export default function TutorsPage() {
     const schoolParams = parseParam(router.query.school);
     const majorParams = parseParam(router.query.major);
     const courseParams = parseParam(router.query.course);
+    const companyParams = parseParam(router.query.company);
+    const internshipParam =
+      typeof router.query.internship === "string" ? router.query.internship : "";
+    const transferParam =
+      typeof router.query.transfer === "string" ? router.query.transfer : "";
     const queryParam =
       typeof router.query.q === "string" ? router.query.q.trim() : "";
 
@@ -535,6 +469,15 @@ export default function TutorsPage() {
     if (queryParam) {
       setSearchQuery(queryParam);
     }
+    if (companyParams.length > 0) {
+      setSelectedCompanies(companyParams);
+    }
+    if (internshipParam) {
+      setCareerIsInternship(internshipParam === "1" || internshipParam.toLowerCase() === "true");
+    }
+    if (transferParam) {
+      setTransferOnly(transferParam === "1" || transferParam.toLowerCase() === "true");
+    }
 
     initializedFromQuery.current = true;
   }, [router.isReady, router.query, northwesternCoursesQuery.data]);
@@ -552,7 +495,7 @@ export default function TutorsPage() {
       ? "Work with mentors who already earned admission and will help you craft a standout application."
       : persona === "enrolled"
       ? "Find tutors who already aced the exact exams, labs, and projects you're tackling now at Northwestern."
-      : "Match with tutors who share your campus, major, and course experience.";
+      : "Match with mentors who share your campus, major, and course experience.";
 
   const resetFilters = () => {
     setSelectedSchools([]);
@@ -561,6 +504,9 @@ export default function TutorsPage() {
     setSelectedCourseIds([]);
     setFirstSessionFreeOnly(false);
     setPriceRange([0, 100]);
+    setSelectedCompanies([]);
+    setCareerIsInternship(true);
+    setTransferOnly(false);
   };
 
   return (
@@ -614,16 +560,23 @@ export default function TutorsPage() {
                     availableMajors={availableMajors}
                     availableSubjects={availableSubjects}
                     availableCourses={northwesternCoursesQuery.data ?? []}
+                    availableCompanies={availableCompanies}
                     selectedSchools={selectedSchools}
                     selectedMajors={selectedMajors}
                     selectedSubjects={selectedSubjects}
                     selectedCourseIds={selectedCourseIds}
+                    selectedCompanies={selectedCompanies}
                     setSelectedSchools={setSelectedSchools}
                     setSelectedMajors={setSelectedMajors}
                     setSelectedSubjects={setSelectedSubjects}
                     setSelectedCourseIds={setSelectedCourseIds}
+                    setSelectedCompanies={setSelectedCompanies}
                     firstSessionFreeOnly={firstSessionFreeOnly}
                     setFirstSessionFreeOnly={setFirstSessionFreeOnly}
+                    careerIsInternship={careerIsInternship}
+                    setCareerIsInternship={setCareerIsInternship}
+                    transferOnly={transferOnly}
+                    setTransferOnly={setTransferOnly}
                     priceRange={priceRange}
                     setPriceRange={setPriceRange}
                     onReset={() => {
@@ -645,7 +598,7 @@ export default function TutorsPage() {
               {personaLabel}
             </span>
             <h1 className="mt-6 max-w-2xl text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl">
-              Find the tutor who already thrives where you want to succeed
+              Find the mentor who already thrives where you want to succeed
             </h1>
             <p className="mt-4 max-w-xl text-base text-slate-600">
               {personaCopy}
@@ -663,7 +616,9 @@ export default function TutorsPage() {
             selectedSubjects.length > 0 ||
             firstSessionFreeOnly ||
             priceRange[0] > 0 ||
-            priceRange[1] < 100) && (
+            priceRange[1] < 100 ||
+            selectedCompanies.length > 0 ||
+            transferOnly) && (
             <div className="mt-6 flex flex-wrap items-center gap-2 text-xs text-slate-500">
               <span>Active filters:</span>
               {selectedSchools.map((school) => (
@@ -700,6 +655,19 @@ export default function TutorsPage() {
                   ${priceRange[0]} - {priceRange[1] >= 100 ? "$100+" : `$${priceRange[1]}`}
                 </span>
               )}
+              {selectedCompanies.map((company) => (
+                <span
+                  key={`company-${company}`}
+                  className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700"
+                >
+                  {company} {careerIsInternship ? "(internship)" : "(career)"}
+                </span>
+              ))}
+              {transferOnly && (
+                <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 font-medium text-amber-700">
+                  Transfer mentors
+                </span>
+              )}
               <button
                 type="button"
                 onClick={resetFilters}
@@ -728,16 +696,23 @@ export default function TutorsPage() {
                     availableMajors={availableMajors}
                     availableSubjects={availableSubjects}
                     availableCourses={northwesternCoursesQuery.data ?? []}
+                    availableCompanies={availableCompanies}
                     selectedSchools={selectedSchools}
                     selectedMajors={selectedMajors}
                     selectedSubjects={selectedSubjects}
                     selectedCourseIds={selectedCourseIds}
+                    selectedCompanies={selectedCompanies}
                     setSelectedSchools={setSelectedSchools}
                     setSelectedMajors={setSelectedMajors}
                     setSelectedSubjects={setSelectedSubjects}
                     setSelectedCourseIds={setSelectedCourseIds}
+                    setSelectedCompanies={setSelectedCompanies}
                     firstSessionFreeOnly={firstSessionFreeOnly}
                     setFirstSessionFreeOnly={setFirstSessionFreeOnly}
+                    careerIsInternship={careerIsInternship}
+                    setCareerIsInternship={setCareerIsInternship}
+                    transferOnly={transferOnly}
+                    setTransferOnly={setTransferOnly}
                     priceRange={priceRange}
                     setPriceRange={setPriceRange}
                     onReset={resetFilters}
@@ -757,6 +732,9 @@ export default function TutorsPage() {
                   searchQuery={searchQuery}
                   minPrice={priceRange[0]}
                   maxPrice={priceRange[1]}
+                  selectedCompanies={selectedCompanies}
+                  careerIsInternship={careerIsInternship}
+                  transferOnly={transferOnly}
                 />
             </div>
           </section>

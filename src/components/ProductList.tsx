@@ -27,6 +27,9 @@ type searchType = {
   firstSessionFreeOnly: boolean;
   minPrice: number;
   maxPrice: number;
+  selectedCompanies: string[];
+  careerIsInternship?: boolean;
+  transferOnly: boolean;
 };
 
 export default function ProductList({
@@ -38,6 +41,9 @@ export default function ProductList({
   firstSessionFreeOnly,
   minPrice,
   maxPrice,
+  selectedCompanies,
+  careerIsInternship,
+  transferOnly,
 }: searchType) {
   const tutors = api.post.getAllApprovedTutors.useQuery({
     selectedMajors,
@@ -47,27 +53,50 @@ export default function ProductList({
     firstSessionFreeOnly,
     minPrice,
     maxPrice,
+    selectedCompanies,
+    careerIsInternship,
+    transferOnly,
   });
 
   useEffect(() => {
     void tutors.refetch();
-  }, [selectedMajors, selectedSchools, selectedSubjects, selectedCourses, firstSessionFreeOnly, minPrice, maxPrice]);
+  }, [
+    selectedMajors,
+    selectedSchools,
+    selectedSubjects,
+    selectedCourses,
+    firstSessionFreeOnly,
+    minPrice,
+    maxPrice,
+    selectedCompanies,
+    careerIsInternship,
+    transferOnly,
+  ]);
 
   const filteredTutors = tutors.data
     ? tutors.data
         .filter((person) => {
-          const fullName = `${person.firstName} ${person.lastName}`;
-          const nameMatch = 
-            fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            person.username?.toLowerCase().includes(searchQuery.toLowerCase());
-          
-          // Course filtering is now handled by the backend query
-          return nameMatch;
+          const q = searchQuery.trim().toLowerCase();
+          if (!q) return true;
+
+          const fullName = `${person.firstName ?? ""} ${person.lastName ?? ""}`.trim();
+          const haystacks: string[] = [
+            fullName,
+            person.username ?? "",
+            person.school ?? "",
+            person.major ?? "",
+            person.bio ?? "",
+            (person as any).description ?? "",
+            ...(Array.isArray(person.subjects) ? person.subjects : []),
+            ...((person as any).careerCompanies ?? []),
+          ];
+
+          return haystacks.some((value) => value.toLowerCase().includes(q));
         })
         .sort((a, b) => {
           // Sort by number of paid bookings (descending)
-          const aBookings = a.bookings?.length ?? 0;
-          const bBookings = b.bookings?.length ?? 0;
+          const aBookings = (a as any).bookings?.length ?? 0;
+          const bBookings = (b as any).bookings?.length ?? 0;
           return bBookings - aBookings;
         })
     : [];
@@ -75,8 +104,7 @@ export default function ProductList({
   return (
     <div className="mx-auto max-w-6xl">
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
-        {tutors.isFetchedAfterMount &&
-          tutors.data &&
+        {tutors.data &&
           filteredTutors.map((person) => (
             <Person
               key={person.id}

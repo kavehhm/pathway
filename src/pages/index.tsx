@@ -1,102 +1,111 @@
 import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 
-import NewNav from "~/components/NewNav";
 import majors from "~/majors";
 import schools from "~/schools";
 import { api } from "~/utils/api";
+import PortalMultiselect from "~/components/PortalMultiselect";
 
 const FEATURED_SCHOOLS = [
   { name: "UCLA", logo: "/ucla.png" },
-  { name: "UC Berkeley", logo: "/berkeley.png" },
+  { name: "Cornell", logo: "/cornell.png" },
   { name: "Northwestern", logo: "/northwestern.png" },
   { name: "Brown", logo: "/brown.png" },
 ];
 
+
 const DIFFERENTIATORS = [
   {
-    title: "Dream school mentors",
+    title: "Recent experience triumphs old experience",
     description:
-      "Every tutor currently attends the universities you aspire to. Learn from insiders who already earned admission.",
+      "Today's systems are not the same as they were years ago. Learn from people who are doing what you're trying to do.",
   },
   {
-    title: "Course specific search",
+    title: "Find the perfect mentor for your goals",
     description:
-      "Filter by major, class, or focus area and connect with mentors who already aced the exact syllabus you’re tackling.",
+      "Filter by school, company, or major and find the mentor with the keys to your goals.",
   },
   {
-    title: "Vetted & ready to teach",
+    title: "Get real results",
     description:
-      "Free first session to help you decide if the mentor is right for you.",
+      "Ask what you need, follow their footsteps, and be where you want to be.",
   },
 ];
 
 const TESTIMONIALS = [
   {
-    name: "Layne, admitted to Northwestern",
+    name: "“Interned at Google last summer”",
     quote:
-      "My mentor walked me through the exact essay that got them in and personalized my essay to my background.",
+      "I found someone who had just done the exact recruiting process. They reviewed my resume, told me what mattered, and helped me prep the interview.",
   },
   {
-    name: "Vincent, Northwestern freshman",
+    name: "“Transferred into a top private university”",
     quote:
-      "Pathway helped me find a tutor who already took CompEng 203 and helped me get an A!",
+      "My mentor explained the strategy, timeline, and what they’d do differently. It saved me weeks of guessing.",
   },
   {
-    name: "Tony, 8th grade student",
+    name: "“Aced this exact class with this professor”",
     quote:
-      "My mentor helped me in math and now I am on track to take AP Calculus BC as a freshman in high school.",
+      "They showed me how to study for the exams, what to focus on, and how to avoid the traps that tank grades.",
   },
 ];
 
-const ROLES = [
-  { id: "aspiring", label: "College applicant" },
-  { id: "enrolled", label: "Course search" },
-];
+const PATHS = [
+  { id: "admissions", label: "College admissions" },
+  { id: "internship", label: "Internship / career" },
+  { id: "course", label: "Course search" },
+] as const;
 
 export default function Home() {
   const router = useRouter();
-  const [role, setRole] = useState<(typeof ROLES)[number]["id"]>("aspiring");
+  const [path, setPath] = useState<(typeof PATHS)[number]["id"]>("admissions");
   const [schoolQuery, setSchoolQuery] = useState("");
   const [majorQuery, setMajorQuery] = useState("");
+  const [companyQuery, setCompanyQuery] = useState("");
+  const [internshipOnly, setInternshipOnly] = useState(true);
+  const [transferOnly, setTransferOnly] = useState(false);
   const [courseQuery, setCourseQuery] = useState("");
 
   const trimmedSchoolOptions = useMemo(() => schools.slice(0, 150), []);
-  const trimmedMajorOptions = useMemo(() => majors.slice(0, 150), []);
-  const approvedTutors = api.post.getAllApprovedTutors.useQuery({});
-  
-  // Get top 3 tutors by paid bookings count
-  const topTutors = useMemo(() => {
-    if (!approvedTutors.data) return [];
-    return [...approvedTutors.data]
-      .sort((a, b) => (b.bookings?.length ?? 0) - (a.bookings?.length ?? 0))
-      .slice(0, 3);
-  }, [approvedTutors.data]);
+  const companiesQuery = api.post.getAllCompanies.useQuery(undefined, {
+    staleTime: 1000 * 60 * 60,
+  });
+  // company options are fetched via tRPC for the PortalMultiselect (no local trimming needed)
   
   // Load Northwestern courses from database - only when Northwestern is selected
   const northwesternCoursesQuery = api.post.getCoursesBySchool.useQuery(
     { school: "Northwestern University" },
-    { enabled: role === "enrolled" && schoolQuery === "Northwestern University" }
+    { enabled: path === "course" && schoolQuery === "Northwestern University" }
   );
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const params = new URLSearchParams();
-    if (schoolQuery.trim()) {
-      params.set("school", schoolQuery.trim());
+    const cleanedSchool = schoolQuery.trim();
+    const cleanedMajor = majorQuery.trim();
+    const cleanedCompany = companyQuery.trim();
+    const cleanedCourse = courseQuery.trim();
+
+    if (cleanedSchool) {
+      params.set("school", cleanedSchool);
     }
-    if (role === "aspiring" && majorQuery.trim()) {
-      params.set("major", majorQuery.trim());
+
+    if (path === "course") {
+      if (cleanedCourse) params.set("course", cleanedCourse);
     }
-    if (role === "enrolled" && courseQuery.trim()) {
-      params.set("course", courseQuery.trim());
+    if (path === "admissions") {
+      if (cleanedMajor) params.set("major", cleanedMajor);
+      if (transferOnly) params.set("transfer", "1");
     }
-    if (role) {
-      params.set("role", role);
+    if (path === "internship") {
+      if (cleanedCompany) params.set("company", cleanedCompany);
+      params.set("internship", internshipOnly ? "1" : "0");
     }
+
+    params.set("path", path);
     const queryString = params.toString();
     void router.push(queryString ? `/tutors?${queryString}` : "/tutors");
   };
@@ -107,7 +116,7 @@ export default function Home() {
         <title>Pathway</title>
         <meta
           name="description"
-          content="Match with verified peer mentors from top universities by school, major, or course. Pathway makes it effortless to find the tutor who already thrives where you want to go."
+          content="Pathway helps you find and book a call with someone who just did what you’re trying to do — internships, transfers, tough classes, or admissions."
         />
         <link rel="icon" href="/ourlogo720.png" />
         
@@ -115,7 +124,7 @@ export default function Home() {
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://www.pathwaytutors.com" />
         <meta property="og:title" content="Pathway" />
-        <meta property="og:description" content="Match with verified peer mentors from top universities by school, major, or course. Pathway makes it effortless to find the tutor who already thrives where you want to go." />
+        <meta property="og:description" content="Pathway helps you find and book a call with someone who just did what you’re trying to do — internships, transfers, tough classes, or admissions." />
         <meta property="og:image" content="https://www.pathwaytutors.com/og-image.png" />
         <meta property="og:image:secure_url" content="https://www.pathwaytutors.com/og-image.png" />
         <meta property="og:image:type" content="image/png" />
@@ -135,7 +144,7 @@ export default function Home() {
         {/* Twitter Card metadata */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Pathway" />
-        <meta name="twitter:description" content="Match with verified peer mentors from top universities by school, major, or course." />
+        <meta name="twitter:description" content="Find and book a call with someone who just did what you’re trying to do." />
         <meta name="twitter:image" content="https://www.pathwaytutors.com/og-image.png" />
         <meta name="twitter:image:alt" content="Pathway" />
         
@@ -145,192 +154,207 @@ export default function Home() {
       </Head>
       <div className="relative min-h-screen">
         <main className="relative mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 lg:px-8">
-            <section className="grid gap-16 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:gap-20">
-              <div>
+            <section className="grid gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-start lg:gap-20">
+              {/* Copy (mobile: above search, desktop: left column). */}
+              <div className="order-1 lg:order-1 lg:col-start-1">
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-1 text-sm font-medium text-violet-600 shadow-sm backdrop-blur">
                   <span className="h-2 w-2 rounded-full bg-violet-500" />
-                  Tutors from the campuses you care about
+                  Real experience. Real results.
                 </div>
                 <h1 className="mt-8 text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
-                  Your dream school. Your major. Your mentor.
+                  Follow Their Footsteps.
                 </h1>
                 <p className="mt-6 max-w-xl text-lg text-slate-600">
-                  Pathway connects ambitious high school students and current college learners with verified tutors already thriving in the exact programs, majors, and courses you care about.
+                  Your dream is already being lived by someone else. Pathway connects you with mentors who recently achieved the exact outcomes you&apos;re striving for. Learn from people who get you.
                 </p>
+              </div>
 
-                <form
-                  onSubmit={handleSubmit}
-                  className="mt-10 rounded-3xl border-2 border-violet-200/60 bg-white/85 p-6 shadow-2xl backdrop-blur ring-1 ring-violet-100/50"
-                >
-                  <div className="flex flex-wrap gap-2">
-                    {ROLES.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => setRole(option.id)}
-                        className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                          role === option.id
-                            ? "bg-violet-500 text-white shadow"
-                            : "bg-violet-100 text-violet-700 hover:bg-violet-200"
-                        }`}
+              {/* Search (mobile: below copy, desktop: right column). */}
+              <div className="relative order-2 lg:order-2 lg:col-start-2 lg:row-span-2">
+                <div className="absolute -left-10 -top-10 h-44 w-44 rounded-full bg-violet-300/30 blur-3xl" />
+                <div className="absolute -right-8 bottom-24 h-64 w-64 rounded-full bg-indigo-300/20 blur-3xl" />
+                <div className="relative rounded-[2.5rem] border border-white/60 bg-white/70 p-8 shadow-2xl backdrop-blur">
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-slate-700">
+                        Search for a mentor
+                      </span>
+                      <Link
+                        href="/tutors"
+                        className="text-sm font-semibold text-violet-600 hover:text-violet-700"
                       >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {role === "enrolled" && (
-                    <div className="mt-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-700">
-                      <span className="font-semibold">Note:</span> Course search is currently only available for Northwestern University students.
+                        Browse all →
+                      </Link>
                     </div>
-                  )}
 
-                  <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-[1.2fr,1.2fr,0.8fr]">
-                    <label className="flex flex-col gap-2">
-                      <span className="text-sm font-medium text-slate-600">Target school</span>
-                      <input
-                        list="school-options"
-                        value={schoolQuery}
-                        onChange={(event) => setSchoolQuery(event.target.value)}
-                        placeholder="Northwestern University"
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-200"
-                      />
-                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {PATHS.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => {
+                            setPath(option.id);
+                            setMajorQuery("");
+                            setCompanyQuery("");
+                            setCourseQuery("");
+                          }}
+                          className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                            path === option.id
+                              ? "bg-violet-600 text-white shadow"
+                              : "bg-violet-100 text-violet-700 hover:bg-violet-200"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
 
-                    {role === "aspiring" ? (
+                    <div className="grid grid-cols-1 gap-4">
                       <label className="flex flex-col gap-2">
-                        <span className="text-sm font-medium text-slate-600">Target major</span>
+                        <span className="text-sm font-medium text-slate-600">School (optional)</span>
                         <input
-                          list="major-options"
-                          value={majorQuery}
-                          onChange={(event) => setMajorQuery(event.target.value)}
-                          placeholder="Computer Science"
+                          list="school-options"
+                          value={schoolQuery}
+                          onChange={(event) => setSchoolQuery(event.target.value)}
+                          placeholder="Northwestern University"
                           className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-200"
                         />
                       </label>
-                    ) : schoolQuery === "Northwestern University" ? (
-                      <label className="flex flex-col gap-2">
-                        <span className="text-sm font-medium text-slate-600">Course search</span>
-                        <input
-                          list="course-options"
-                          value={courseQuery}
-                          onChange={(event) => setCourseQuery(event.target.value)}
-                          placeholder="CS 211 or Fundamentals"
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-200"
-                        />
-                      </label>
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        <span className="text-sm font-medium text-slate-600">Course search</span>
-                        <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-500">
-                          Select Northwestern University to search courses
+
+                      {path === "admissions" && (
+                        <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                          <span className="font-medium">Transfer</span>
+                          <input
+                            type="checkbox"
+                            checked={transferOnly}
+                            onChange={(e) => setTransferOnly(e.target.checked)}
+                            className="h-5 w-5 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                          />
+                        </label>
+                      )}
+
+                      {path === "course" ? (
+                        schoolQuery === "Northwestern University" ? (
+                          <div className="space-y-2">
+                            <span className="text-sm font-medium text-slate-600">Course (Northwestern)</span>
+                            <div className="rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-sm focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100">
+                              <PortalMultiselect
+                                placeholder="Search Northwestern courses"
+                                selectedValues={courseQuery ? [courseQuery] : []}
+                                options={(northwesternCoursesQuery.data ?? []).map(
+                                  (c) => `${c.courseId} - ${c.courseName}`,
+                                )}
+                                maxSelected={1}
+                                onChange={(items) => setCourseQuery(items[0] ?? "")}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                            Course search is currently only available for Northwestern University.
+                          </div>
+                        )
+                      ) : path === "admissions" ? (
+                        <div className="space-y-2">
+                          <span className="text-sm font-medium text-slate-600">
+                            Target major / program
+                          </span>
+                          <div className="rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-sm focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100">
+                            <PortalMultiselect
+                              placeholder="Search majors (e.g., Computer Science)"
+                              selectedValues={majorQuery ? [majorQuery] : []}
+                              options={majors}
+                              maxSelected={1}
+                              onChange={(items) => setMajorQuery(items[0] ?? "")}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="space-y-2">
+                            <span className="text-sm font-medium text-slate-600">Company</span>
+                            <div className="rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-sm focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100">
+                              <PortalMultiselect
+                                placeholder="Search companies (e.g., Google)"
+                                selectedValues={companyQuery ? [companyQuery] : []}
+                                options={companiesQuery.data ?? []}
+                                maxSelected={1}
+                                onChange={(items) => setCompanyQuery(items[0] ?? "")}
+                              />
+                            </div>
+                          </div>
+                          <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                            <span className="font-medium">Internship</span>
+                            <input
+                              type="checkbox"
+                              checked={internshipOnly}
+                              onChange={(e) => setInternshipOnly(e.target.checked)}
+                              className="h-5 w-5 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                            />
+                          </label>
+                        </div>
+                      )}
+                    </div>
 
-                    <div className="flex items-end">
-                      <button
-                        type="submit"
-                        className="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-4 py-3 text-base font-semibold text-white shadow-xl transition hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
-                      >
-                        Start matching
-                      </button>
+                    <button
+                      type="submit"
+                      className="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-4 py-3 text-base font-semibold text-white shadow-xl transition hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
+                    >
+                      Search
+                    </button>
+
+                    <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-100 via-white to-purple-50 p-5 text-sm text-slate-600">
+                      Your upperclassman on speed dial. Book a call. Get the playbook.
+                    </div>
+                  </form>
+                </div>
+              </div>
+
+              {/* Examples + CTAs (mobile: below search, desktop: left column below copy). */}
+              <div className="order-3 lg:order-3 lg:col-start-1">
+                <div className="mt-1 space-y-4">
+                  <div className="rounded-3xl border border-white/70 bg-white/75 p-6 shadow-lg backdrop-blur">
+                    <p className="text-sm font-semibold text-slate-700">Examples</p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {[
+                        "Accepted into your dream CS program",
+                        "Interned at Google last summer",
+                        "Got an A in that exact class last semester",
+                        "Transferred into a T10 university",
+                      ].map((example) => (
+                        <div
+                          key={example}
+                          className="rounded-2xl border border-slate-100 bg-white/90 px-4 py-3 text-sm text-slate-700 shadow-sm"
+                        >
+                          &ldquo;{example}&rdquo;
+                        </div>
+                      ))}
                     </div>
                   </div>
 
-                  <div className="mt-6 flex flex-wrap items-center gap-4 text-sm text-slate-500">
-                    <span>Or</span>
+                  <div className="flex flex-wrap gap-4">
                     <Link
                       href="/tutors"
-                      className="rounded-full bg-violet-100 px-5 py-2.5 text-base font-semibold text-violet-700 transition hover:bg-violet-200 hover:shadow-sm"
+                      className="inline-flex items-center justify-center rounded-full bg-violet-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-violet-700"
                     >
-                      Browse every tutor →
+                      Find a mentor
                     </Link>
-                    <span aria-hidden="true" className="hidden sm:inline">•</span>
-                    <span className="hidden sm:inline">No credit card. First session can be free.</span>
+                    <Link
+                      href="/mentors"
+                      className="inline-flex items-center justify-center rounded-full border border-violet-200 bg-white px-6 py-3 text-sm font-semibold text-violet-700 transition hover:border-violet-300 hover:bg-violet-50"
+                    >
+                      Become a mentor
+                    </Link>
                   </div>
-                </form>
+                </div>
 
                 <datalist id="school-options">
                   {trimmedSchoolOptions.map((schoolName) => (
                     <option key={schoolName} value={schoolName} />
                   ))}
                 </datalist>
-                <datalist id="major-options">
-                  {trimmedMajorOptions.map((majorName) => (
-                    <option key={majorName} value={majorName} />
-                  ))}
-                </datalist>
-                <datalist id="course-options">
-                  {(northwesternCoursesQuery.data ?? []).map((course) => (
-                    <option key={course.id} value={`${course.courseId} - ${course.courseName}`} />
-                  ))}
-                </datalist>
-              </div>
-
-              <div className="relative">
-                <div className="absolute -left-10 -top-10 h-44 w-44 rounded-full bg-violet-300/30 blur-3xl" />
-                <div className="absolute -right-8 bottom-24 h-64 w-64 rounded-full bg-indigo-300/20 blur-3xl" />
-                <div className="relative rounded-[2.5rem] border border-white/60 bg-white/70 p-8 shadow-2xl backdrop-blur">
-                  <div className="flex flex-col gap-6">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-slate-500">Our most popular tutors</span>
-                      <Link
-                        href="/tutors"
-                        className="text-sm font-semibold text-violet-600 hover:text-violet-700"
-                      >
-                        See all
-                      </Link>
-                    </div>
-                    <div className="space-y-5">
-                      {topTutors.map((mentor, index) => {
-                        const fullName = `${mentor.firstName ?? ""} ${mentor.lastName ?? ""}`.trim();
-                        const price =
-                          typeof mentor.hourlyRate === "number"
-                            ? `$${mentor.hourlyRate}/hr`
-                            : "Rate TBD";
-                        const badge =
-                          Array.isArray(mentor.subjects) && mentor.subjects.length > 0
-                            ? mentor.subjects[0] ?? ""
-                            : mentor.major ?? mentor.school ?? "Mentor";
-                        const rank = index + 1;
-                        const bookingsCount = mentor.bookings?.length ?? 0;
-                        return (
-                          <div
-                            key={mentor.id}
-                            className="relative flex items-center gap-4 rounded-2xl border border-slate-100 bg-white/90 px-4 py-3 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
-                          >
-                            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-lg font-bold text-white shadow-md">
-                              {rank}
-                            </div>
-                            <div className="flex flex-1 items-center justify-between">
-                              <div>
-                                <p className="text-sm font-semibold text-slate-900">{fullName}</p>
-                                <p className="text-xs text-slate-500">
-                                  {mentor.school ?? "School"} • {mentor.major ?? "Major"}
-                                </p>
-                                <div className="mt-2 flex items-center gap-2">
-                                  <span className="inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700">
-                                    {badge}
-                                  </span>
-                                  {bookingsCount > 0 && (
-                                    <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                                      {bookingsCount} session{bookingsCount !== 1 ? 's' : ''}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <p className="text-sm font-semibold text-slate-900">{price}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-100 via-white to-purple-50 p-5 text-sm text-slate-600">
-                      Pathway&apos;s matching engine surfaces mentors by course, availability, and budget so you only see relevant fits.
-                    </div>
-                  </div>
-                </div>
+                {/* majors + course options are rendered via PortalMultiselect */}
+                {/* company options are rendered via PortalMultiselect */}
               </div>
             </section>
 
@@ -371,20 +395,24 @@ export default function Home() {
 
             <section className="mt-28 grid gap-16 lg:grid-cols-[1.1fr,0.9fr] lg:items-center">
               <div className="rounded-[2.5rem] border border-white/70 bg-gradient-to-br from-white/90 to-purple-100/50 p-10 shadow-xl backdrop-blur">
-                <h2 className="text-3xl font-semibold text-slate-900">Designed for both sides of the journey</h2>
+                <h2 className="text-3xl font-semibold text-slate-900">A search engine for those looking for:</h2>
                 <div className="mt-8 space-y-6 text-slate-600">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900">High school dreamers</h3>
+                <div>
+                    <h3 className="text-lg font-semibold text-slate-900">College admissions</h3>
                     <p>
-                      Work directly with current students from your target school to review essays, plan coursework, and
-                      build confidence before you submit.
+                      Talk to students who attend the programs you want.
                     </p>
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-900">Current college students</h3>
+                    <h3 className="text-lg font-semibold text-slate-900">Internships</h3>
                     <p>
-                      Unlock upperclassmen who crushed the exact exams and labs you&apos;re preparing for. Every mentor
-                      shares notes, study frameworks, and proven tactics.
+                      Find mentors who recently recruited into the roles you want.
+                    </p>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">Course help</h3>
+                    <p>
+                      Get an upperclassman who aced the exact class you&apos;re taking.
                     </p>
                   </div>
                 </div>
@@ -393,10 +421,10 @@ export default function Home() {
                     href="/tutors"
                     className="inline-flex items-center justify-center rounded-full bg-violet-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-violet-700"
                   >
-                    Explore tutors
+                    Find a mentor
                   </Link>
                   <Link
-                    href="/tutor-onboarding"
+                    href="/mentors"
                     className="inline-flex items-center justify-center rounded-full border border-violet-200 bg-white px-6 py-3 text-sm font-semibold text-violet-700 transition hover:border-violet-300 hover:bg-violet-50"
                   >
                     Become a mentor
@@ -421,8 +449,7 @@ export default function Home() {
                 <div>
                   <h2 className="text-3xl font-semibold">Let&apos;s find your campus insider</h2>
                   <p className="mt-4 text-base text-violet-100">
-                    Share your goal, and Pathway will surface mentors who already made it there. Keep every discovery in
-                    one place, book on your timeline, and get coached by people living your dream.
+                    Filter to find the perfect mentor for your goals.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-4">
@@ -430,13 +457,13 @@ export default function Home() {
                     href="/tutors"
                     className="inline-flex flex-1 items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-semibold text-violet-700 transition hover:bg-violet-50"
                   >
-                    Start searching tutors
+                    Start searching mentors
                   </Link>
                   <Link
-                    href="/tutor-onboarding"
+                    href="/mentors"
                     className="inline-flex items-center justify-center rounded-full border border-white/60 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
                   >
-                    List yourself as a tutor
+                    Become a mentor
                   </Link>
                 </div>
               </div>

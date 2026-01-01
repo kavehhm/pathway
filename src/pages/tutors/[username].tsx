@@ -391,7 +391,14 @@ const User = () => {
 
                     // dangerouslySetInnerHTML={{ __html: product.description }}
                   >
-                    {tutor.data?.school}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span>{tutor.data?.school}</span>
+                      {(tutor.data as any)?.isTransfer === true && (
+                        <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700">
+                          Transfer
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="mt-5">
@@ -429,7 +436,25 @@ const User = () => {
                 </div>
               </div>
 
-              <div className="mt-8 border-t border-gray-200 pt-8">
+              {/* Career companies (plain text + small badges) */}
+              {Array.isArray((tutor.data as any)?.careerCompanies) &&
+                (tutor.data as any).careerCompanies.length > 0 && (
+                  <div className="mt-5">
+                    <h2 className="text-sm font-medium text-gray-900">Companies</h2>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-2">
+                      <p className="prose prose-sm whitespace-pre-line text-gray-500">
+                        {((tutor.data as any).careerCompanies as string[]).join(", ")}
+                      </p>
+                      {typeof (tutor.data as any)?.careerIsInternship === "boolean" && (
+                        <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700">
+                          {(tutor.data as any).careerIsInternship ? "Internship" : "Career"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+              <div className="mt-6 border-t border-gray-200 pt-6">
                 <h2 className="text-sm font-medium text-gray-900">Subjects</h2>
 
                 <div className="prose prose-sm mt-4 text-gray-500">
@@ -448,7 +473,7 @@ const User = () => {
 
               {/* Courses Section */}
               {tutorCourses.data && tutorCourses.data.length > 0 && (
-                <div className="mt-8 border-t border-gray-200 pt-8">
+                <div className="mt-6 border-t border-gray-200 pt-6">
                   <h2 className="text-sm font-medium text-gray-900">
                     {tutor.data?.school} Courses
                   </h2>
@@ -511,7 +536,7 @@ const User = () => {
           <Cal calLink={tutor.data?.calendlyLink ?? "/pathwaytutors/15min"} />
         </div>
       )} */}
-      <div id="bookappointment" className="mx-auto max-w-7xl py-12 px-4 sm:px-6 lg:px-8">
+      <div id="bookappointment" className="mx-auto max-w-7xl py-8 px-4 sm:px-6 lg:px-8">
         <ManualCal userId={username as string} />
       </div>
 
