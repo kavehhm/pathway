@@ -306,7 +306,7 @@ const TutorSearchBar = ({
         type="text"
         value={searchQuery}
         onChange={(event) => setSearchQuery(event.target.value)}
-        placeholder="Search tutors by name or username"
+        placeholder="Search mentors by name or username"
         className="w-full border-0 bg-transparent text-base text-slate-900 placeholder:text-slate-400 focus:outline-none"
       />
     </div>
