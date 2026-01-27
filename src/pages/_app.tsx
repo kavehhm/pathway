@@ -10,7 +10,11 @@ import { Toaster } from "react-hot-toast";
 
 const MyApp: AppType = ({ Component, pageProps }) => {
   return (
-    <ClerkProvider  {...pageProps}>
+    <ClerkProvider
+      {...pageProps}
+      afterSignInUrl="/"
+      afterSignUpUrl="/tutor-onboarding"
+    >
       <div><Toaster/></div>
 
       <Head>
