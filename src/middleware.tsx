@@ -3,7 +3,6 @@ import { authMiddleware } from "@clerk/nextjs";
 export default authMiddleware({
   publicRoutes: [
     "/api/trpc(.*)",
-    "/api/health",
     "/",
     "/tutors",
     "/tutors(.*)",
@@ -14,6 +13,8 @@ export default authMiddleware({
     "/sso-callback(.*)",
     "/api/trpc/post.getAllApprovedTutors,post.getAllSchools,post.getAllMajors,post.getAllSubjects",
   ],
+  // ignoredRoutes completely bypass Clerk middleware - use for health checks, webhooks, etc.
+  ignoredRoutes: ["/api/health"],
 });
  
 export const config = {
