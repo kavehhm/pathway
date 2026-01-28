@@ -4,6 +4,7 @@ import { promises as fs } from "fs";
 import path from "path";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
+import { getSchoolPrestigeRank } from "~/schoolPrestige";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
@@ -157,7 +158,14 @@ export const postRouter = createTRPCRouter({
         },
       });
 
-      return tutors;
+      // Sort tutors by school prestige (lower rank = more prestigious = shown first)
+      const sortedTutors = tutors.sort((a, b) => {
+        const rankA = getSchoolPrestigeRank(a.school);
+        const rankB = getSchoolPrestigeRank(b.school);
+        return rankA - rankB;
+      });
+
+      return sortedTutors;
     }),
 
   getTutor: publicProcedure.input(z.string()).query(({ ctx, input }) => {
