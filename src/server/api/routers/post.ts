@@ -139,7 +139,8 @@ export const postRouter = createTRPCRouter({
             transferOnly === true ? { isTransfer: true } : {},
             // Filter by courses
             courseFilter,
-            { stripeAccountStatus: 'active' },
+            // Only show approved tutors
+            { approved: true },
           ],
         },
         include: {
@@ -359,6 +360,53 @@ export const postRouter = createTRPCRouter({
             }
           }
         }
+
+        // ============= AUTO-APPROVAL LOGIC =============
+        // Check if all required fields are filled to auto-approve the tutor
+        const hasValidImage = !!imageSrc && imageSrc !== '' && !imageSrc.includes('gravatar');
+        const hasUsername = !!username && username !== 'None' && username.trim() !== '';
+        const hasHourlyRate = !!hourlyRate && hourlyRate > 0;
+        const hasBio = !!bio && bio !== 'None' && bio.trim() !== '';
+        const hasDescription = !!description && description !== 'None' && description.trim() !== '';
+        const hasSchool = !!school && school !== 'None' && school.trim() !== '';
+        const hasMajor = !!major && major !== 'None' && major.trim() !== '';
+        const hasGpa = !!gpa && gpa > 0;
+        const hasSubjects = !!subjects && subjects.length > 0;
+        const hasMeetingLink = !!meetingLink && meetingLink.trim() !== '';
+        
+        // Check if at least one availability slot has both start and end time
+        const hasValidAvailability = availability.some(
+          (day) => day.available && day.startTime && day.endTime
+        );
+
+        // Auto-approve if all required fields are complete
+        const shouldBeApproved = 
+          hasValidImage &&
+          hasUsername &&
+          hasHourlyRate &&
+          hasBio &&
+          hasDescription &&
+          hasSchool &&
+          hasMajor &&
+          hasGpa &&
+          hasSubjects &&
+          hasMeetingLink &&
+          hasValidAvailability;
+
+        console.log('Auto-approval check:', {
+          hasValidImage,
+          hasUsername,
+          hasHourlyRate,
+          hasBio,
+          hasDescription,
+          hasSchool,
+          hasMajor,
+          hasGpa,
+          hasSubjects,
+          hasMeetingLink,
+          hasValidAvailability,
+          shouldBeApproved,
+        });
       
       return ctx.db.user.update({
         where: {
@@ -389,6 +437,8 @@ export const postRouter = createTRPCRouter({
             connect: availabilities
           },
           ...(firstSessionFree !== undefined ? { firstSessionFree } : {}),
+          // Auto-set approved status based on profile completeness
+          approved: shouldBeApproved,
         },
       });
     }),
@@ -443,7 +493,7 @@ export const postRouter = createTRPCRouter({
   getAllSchools: publicProcedure.query(({ ctx }) => {
     return ctx.db.user.findMany({
       where: {
-        stripeAccountStatus: 'active',
+        approved: true,
       },
       select: {
         school: true,
@@ -453,7 +503,7 @@ export const postRouter = createTRPCRouter({
   getAllMajors: publicProcedure.query(({ ctx }) => {
     return ctx.db.user.findMany({
       where: {
-        stripeAccountStatus: 'active',
+        approved: true,
       },
       select: {
         major: true,
@@ -467,7 +517,9 @@ export const postRouter = createTRPCRouter({
 
   getAllTutorCompanies: publicProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db.user.findMany({
-      where: { stripeAccountStatus: "active" },
+      where: {
+        approved: true,
+      },
       select: { careerCompanies: true },
     });
 
@@ -487,7 +539,7 @@ export const postRouter = createTRPCRouter({
       const rows = await ctx.db.tutorCourse.findMany({
         where: {
           user: {
-            stripeAccountStatus: "active",
+            approved: true,
             school: input.school,
           },
         },
@@ -642,7 +694,7 @@ export const postRouter = createTRPCRouter({
   getAllSubjects: publicProcedure.query(({ ctx }) => {
     const result = ctx.db.user.findMany({
       where: {
-        stripeAccountStatus: 'active',
+        approved: true,
       },
       select: {
         subjects: true,
@@ -667,18 +719,14 @@ export const postRouter = createTRPCRouter({
       const { tutorId, date, time, amount, studentName, studentEmail } = input;
 
       try {
-        // Get tutor's Stripe Connect account
+        // Verify tutor exists (no longer require Stripe account for booking)
         const tutor = await ctx.db.user.findUnique({
           where: { clerkId: tutorId },
-          select: { stripeAccountId: true, stripeAccountStatus: true }
+          select: { id: true, firstName: true, lastName: true }
         });
 
-        if (!tutor?.stripeAccountId) {
-          throw new Error('Tutor has not set up their payment account');
-        }
-
-        if (tutor.stripeAccountStatus !== 'active') {
-          throw new Error('Tutor payment account is not active');
+        if (!tutor) {
+          throw new Error('Tutor not found');
         }
 
         // Calculate platform fee (10% of the total amount)
@@ -687,14 +735,12 @@ export const postRouter = createTRPCRouter({
 
         console.log(`Payment breakdown: Total: $${amount/100}, Platform fee: $${platformFee/100}, Tutor receives: $${tutorAmount/100}`);
 
-        // Create a PaymentIntent with Stripe Connect
+        // Create a PaymentIntent WITHOUT transfer_data (Separate Charges and Transfers)
+        // Funds go to platform account, then transferred to mentor on withdraw
         const paymentIntent = await stripe.paymentIntents.create({
           amount,
           currency: "usd",
-          application_fee_amount: platformFee, // Platform fee
-          transfer_data: {
-            destination: tutor.stripeAccountId, // Transfer to tutor's account
-          },
+          // No transfer_data - funds stay in platform account
           metadata: {
             tutorId,
             date,
@@ -708,6 +754,7 @@ export const postRouter = createTRPCRouter({
 
         return {
           clientSecret: paymentIntent.client_secret,
+          paymentIntentId: paymentIntent.id,
         };
       } catch (error) {
         console.error('Error creating payment intent:', error);
@@ -991,6 +1038,11 @@ export const postRouter = createTRPCRouter({
           throw new Error('Payment not completed');
         }
 
+        // Extract payment amounts from metadata
+        const totalAmount = paymentIntent.amount;
+        const platformFee = parseInt(paymentIntent.metadata.platformFee ?? '0', 10);
+        const tutorAmount = parseInt(paymentIntent.metadata.tutorAmount ?? '0', 10);
+
         // Normalize date and guard against duplicates
         const bookingDate = new Date(date);
         const normalizedDate = new Date(bookingDate.toISOString().split('T')[0] ?? date);
@@ -1004,18 +1056,23 @@ export const postRouter = createTRPCRouter({
           return { id: existing.id, conflicted: true as const };
         }
 
-        // Create a booking record in the database
+        // Create a booking record with payment information for wallet processing
         const booking = await ctx.db.booking.create({
           data: {
             tutorId,
             studentClerkId,
             date: normalizedDate,
             time,
-            status: 'confirmed'
+            status: 'confirmed',
+            stripePaymentIntentId: paymentIntentId,
+            totalAmountCents: totalAmount,
+            platformFeeCents: platformFee,
+            mentorEarningsCents: tutorAmount,
+            earningsProcessed: false, // Will be set true when session is completed and earnings added
           }
         });
 
-        console.log('Booking created:', booking);
+        console.log('Booking created with payment info:', booking);
 
         // Get tutor information for email
         const tutor = await ctx.db.user.findUnique({
@@ -1335,5 +1392,720 @@ export const postRouter = createTRPCRouter({
 
       return bookingsWithStudents;
     }),
-  
+
+  // ============= MENTOR WALLET & EARNINGS SYSTEM =============
+
+  // Get mentor's wallet balance and recent ledger entries
+  getMentorWallet: publicProcedure
+    .input(z.string()) // mentorClerkId
+    .query(async ({ ctx, input }) => {
+      const mentorId = input;
+
+      // Get or create wallet
+      let wallet = await ctx.db.mentorWallet.findUnique({
+        where: { mentorId },
+      });
+
+      if (!wallet) {
+        wallet = await ctx.db.mentorWallet.create({
+          data: {
+            mentorId,
+            availableCents: 0,
+            pendingCents: 0,
+          },
+        });
+      }
+
+      // Get recent ledger entries
+      const ledgerEntries = await ctx.db.mentorLedgerEntry.findMany({
+        where: { mentorId },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      });
+
+      // Get pending payouts
+      const pendingPayouts = await ctx.db.mentorPayout.findMany({
+        where: {
+          mentorId,
+          status: { in: ['INITIATED', 'REQUIRES_ONBOARDING', 'PROCESSING'] },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return {
+        wallet,
+        ledgerEntries,
+        pendingPayouts,
+      };
+    }),
+
+  // Get completed sessions that haven't had earnings processed yet
+  getUnprocessedEarnings: publicProcedure
+    .input(z.string()) // mentorClerkId
+    .query(async ({ ctx, input }) => {
+      return ctx.db.booking.findMany({
+        where: {
+          tutorId: input,
+          status: 'completed',
+          free: false,
+          earningsProcessed: false,
+          mentorEarningsCents: { not: null },
+        },
+        orderBy: { date: 'desc' },
+      });
+    }),
+
+  // Mark a session as completed and add earnings to mentor's wallet
+  // This would be called when a session is marked as completed
+  completeSessionAndAddEarnings: publicProcedure
+    .input(
+      z.object({
+        bookingId: z.string(),
+        mentorClerkId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { bookingId, mentorClerkId } = input;
+
+      // Get booking
+      const booking = await ctx.db.booking.findUnique({
+        where: { id: bookingId },
+      });
+
+      if (!booking) {
+        throw new Error('Booking not found');
+      }
+
+      if (booking.tutorId !== mentorClerkId) {
+        throw new Error('Not authorized to complete this session');
+      }
+
+      if (booking.earningsProcessed) {
+        throw new Error('Earnings already processed for this session');
+      }
+
+      if (booking.free || !booking.mentorEarningsCents) {
+        throw new Error('No earnings to process for this session');
+      }
+
+      // Use a transaction for safety
+      const result = await ctx.db.$transaction(async (tx) => {
+        // Get or create wallet
+        let wallet = await tx.mentorWallet.findUnique({
+          where: { mentorId: mentorClerkId },
+        });
+
+        if (!wallet) {
+          wallet = await tx.mentorWallet.create({
+            data: {
+              mentorId: mentorClerkId,
+              availableCents: 0,
+              pendingCents: 0,
+            },
+          });
+        }
+
+        // Add to available balance
+        const newAvailableBalance = wallet.availableCents + booking.mentorEarningsCents!;
+
+        // Update wallet
+        const updatedWallet = await tx.mentorWallet.update({
+          where: { mentorId: mentorClerkId },
+          data: {
+            availableCents: newAvailableBalance,
+          },
+        });
+
+        // Create ledger entry
+        await tx.mentorLedgerEntry.create({
+          data: {
+            mentorId: mentorClerkId,
+            type: 'SESSION_EARNED',
+            amountCents: booking.mentorEarningsCents!,
+            balanceAfterCents: newAvailableBalance,
+            relatedSessionId: bookingId,
+            stripePaymentIntentId: booking.stripePaymentIntentId,
+            description: `Earnings from session on ${booking.date.toLocaleDateString()}`,
+          },
+        });
+
+        // Mark booking as completed and earnings processed
+        await tx.booking.update({
+          where: { id: bookingId },
+          data: {
+            status: 'completed',
+            earningsProcessed: true,
+          },
+        });
+
+        return updatedWallet;
+      });
+
+      return { success: true, wallet: result };
+    }),
+
+  // Request a withdrawal - creates Stripe Connect account if needed
+  withdrawEarnings: publicProcedure
+    .input(
+      z.object({
+        mentorClerkId: z.string(),
+        amountCents: z.number().optional(), // If not provided, withdraw all available
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { mentorClerkId, amountCents: requestedAmount } = input;
+
+      // Get mentor data
+      const mentor = await ctx.db.user.findUnique({
+        where: { clerkId: mentorClerkId },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          stripeAccountId: true,
+          stripeChargesEnabled: true,
+          stripePayoutsEnabled: true,
+        },
+      });
+
+      if (!mentor) {
+        throw new Error('Mentor not found');
+      }
+
+      // Get wallet
+      const wallet = await ctx.db.mentorWallet.findUnique({
+        where: { mentorId: mentorClerkId },
+      });
+
+      if (!wallet || wallet.availableCents <= 0) {
+        throw new Error('No available balance to withdraw');
+      }
+
+      // Determine amount to withdraw
+      const withdrawAmount = requestedAmount 
+        ? Math.min(requestedAmount, wallet.availableCents)
+        : wallet.availableCents;
+
+      if (withdrawAmount <= 0) {
+        throw new Error('Invalid withdrawal amount');
+      }
+
+      // Generate idempotency key for this withdrawal
+      const idempotencyKey = `withdraw_${mentorClerkId}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+      // Check if mentor has a Stripe Connect account
+      if (!mentor.stripeAccountId) {
+        // Create Stripe Express account
+        const account = await stripe.accounts.create({
+          type: 'express',
+          country: 'US',
+          email: mentor.email,
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+          business_type: 'individual',
+          individual: {
+            first_name: mentor.firstName,
+            last_name: mentor.lastName,
+            email: mentor.email,
+          },
+        });
+
+        // Update mentor record with Stripe account ID
+        await ctx.db.user.update({
+          where: { clerkId: mentorClerkId },
+          data: {
+            stripeAccountId: account.id,
+            stripeChargesEnabled: account.charges_enabled,
+            stripePayoutsEnabled: account.payouts_enabled,
+            stripeRequirements: account.requirements as any,
+          },
+        });
+
+        // Create payout record with REQUIRES_ONBOARDING status
+        const payout = await ctx.db.mentorPayout.create({
+          data: {
+            mentorId: mentorClerkId,
+            amountCents: withdrawAmount,
+            status: 'REQUIRES_ONBOARDING',
+            idempotencyKey,
+          },
+        });
+
+        // Create ledger entry
+        await ctx.db.mentorLedgerEntry.create({
+          data: {
+            mentorId: mentorClerkId,
+            type: 'WITHDRAW_REQUESTED',
+            amountCents: -withdrawAmount,
+            balanceAfterCents: wallet.availableCents - withdrawAmount,
+            relatedPayoutId: payout.id,
+            description: 'Withdrawal requested - Stripe onboarding required',
+          },
+        });
+
+        // Deduct from available balance (held until onboarding complete)
+        await ctx.db.mentorWallet.update({
+          where: { mentorId: mentorClerkId },
+          data: {
+            availableCents: wallet.availableCents - withdrawAmount,
+            pendingCents: wallet.pendingCents + withdrawAmount,
+          },
+        });
+
+        // Create account link for onboarding
+        const baseUrl = (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test')
+          ? 'http://localhost:3000' 
+          : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000');
+
+        const accountLink = await stripe.accountLinks.create({
+          account: account.id,
+          refresh_url: `${baseUrl}/earnings?refresh=true`,
+          return_url: `${baseUrl}/earnings?onboarding=complete&payoutId=${payout.id}`,
+          type: 'account_onboarding',
+        });
+
+        return {
+          success: true,
+          requiresOnboarding: true,
+          onboardingUrl: accountLink.url,
+          payoutId: payout.id,
+          message: 'Please complete Stripe onboarding to receive your funds',
+        };
+      }
+
+      // Check if account is fully onboarded
+      const account = await stripe.accounts.retrieve(mentor.stripeAccountId);
+      
+      // Update account status in DB
+      await ctx.db.user.update({
+        where: { clerkId: mentorClerkId },
+        data: {
+          stripeChargesEnabled: account.charges_enabled,
+          stripePayoutsEnabled: account.payouts_enabled,
+          stripeRequirements: account.requirements as any,
+        },
+      });
+
+      if (!account.payouts_enabled) {
+        // Create payout record with REQUIRES_ONBOARDING status
+        const payout = await ctx.db.mentorPayout.create({
+          data: {
+            mentorId: mentorClerkId,
+            amountCents: withdrawAmount,
+            status: 'REQUIRES_ONBOARDING',
+            idempotencyKey,
+          },
+        });
+
+        // Create ledger entry
+        await ctx.db.mentorLedgerEntry.create({
+          data: {
+            mentorId: mentorClerkId,
+            type: 'WITHDRAW_REQUESTED',
+            amountCents: -withdrawAmount,
+            balanceAfterCents: wallet.availableCents - withdrawAmount,
+            relatedPayoutId: payout.id,
+            description: 'Withdrawal requested - additional verification required',
+          },
+        });
+
+        // Deduct from available balance
+        await ctx.db.mentorWallet.update({
+          where: { mentorId: mentorClerkId },
+          data: {
+            availableCents: wallet.availableCents - withdrawAmount,
+            pendingCents: wallet.pendingCents + withdrawAmount,
+          },
+        });
+
+        // Create account link for continued onboarding
+        const baseUrl = (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test')
+          ? 'http://localhost:3000' 
+          : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000');
+
+        const accountLink = await stripe.accountLinks.create({
+          account: mentor.stripeAccountId,
+          refresh_url: `${baseUrl}/earnings?refresh=true`,
+          return_url: `${baseUrl}/earnings?onboarding=complete&payoutId=${payout.id}`,
+          type: 'account_onboarding',
+        });
+
+        return {
+          success: true,
+          requiresOnboarding: true,
+          onboardingUrl: accountLink.url,
+          payoutId: payout.id,
+          message: 'Please complete additional verification to receive your funds',
+        };
+      }
+
+      // Account is ready - create the transfer
+      const result = await ctx.db.$transaction(async (tx) => {
+        // Create payout record
+        const payout = await tx.mentorPayout.create({
+          data: {
+            mentorId: mentorClerkId,
+            amountCents: withdrawAmount,
+            status: 'PROCESSING',
+            idempotencyKey,
+          },
+        });
+
+        try {
+          // Create Stripe transfer
+          const transfer = await stripe.transfers.create({
+            amount: withdrawAmount,
+            currency: 'usd',
+            destination: mentor.stripeAccountId!,
+            metadata: {
+              mentorClerkId,
+              payoutId: payout.id,
+            },
+          }, {
+            idempotencyKey,
+          });
+
+          // Update payout with transfer ID
+          await tx.mentorPayout.update({
+            where: { id: payout.id },
+            data: {
+              status: 'PAID',
+              stripeTransferId: transfer.id,
+            },
+          });
+
+          // Create ledger entries
+          await tx.mentorLedgerEntry.create({
+            data: {
+              mentorId: mentorClerkId,
+              type: 'WITHDRAW_REQUESTED',
+              amountCents: -withdrawAmount,
+              balanceAfterCents: wallet.availableCents - withdrawAmount,
+              relatedPayoutId: payout.id,
+              description: 'Withdrawal processed',
+            },
+          });
+
+          await tx.mentorLedgerEntry.create({
+            data: {
+              mentorId: mentorClerkId,
+              type: 'TRANSFER_CREATED',
+              amountCents: withdrawAmount,
+              relatedPayoutId: payout.id,
+              stripeTransferId: transfer.id,
+              description: `Transfer sent to bank account`,
+            },
+          });
+
+          // Update wallet
+          await tx.mentorWallet.update({
+            where: { mentorId: mentorClerkId },
+            data: {
+              availableCents: wallet.availableCents - withdrawAmount,
+            },
+          });
+
+          return {
+            success: true,
+            requiresOnboarding: false,
+            payoutId: payout.id,
+            transferId: transfer.id,
+            amountCents: withdrawAmount,
+            message: 'Withdrawal successful! Funds are on their way.',
+          };
+        } catch (error: any) {
+          // Transfer failed - update payout and restore balance
+          await tx.mentorPayout.update({
+            where: { id: payout.id },
+            data: {
+              status: 'FAILED',
+              failureReason: error.message,
+            },
+          });
+
+          await tx.mentorLedgerEntry.create({
+            data: {
+              mentorId: mentorClerkId,
+              type: 'TRANSFER_FAILED',
+              amountCents: 0,
+              relatedPayoutId: payout.id,
+              description: `Transfer failed: ${error.message}`,
+            },
+          });
+
+          throw new Error(`Transfer failed: ${error.message}`);
+        }
+      });
+
+      return result;
+    }),
+
+  // Process pending payout after onboarding is complete
+  processPendingPayout: publicProcedure
+    .input(
+      z.object({
+        payoutId: z.string(),
+        mentorClerkId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { payoutId, mentorClerkId } = input;
+
+      // Get payout
+      const payout = await ctx.db.mentorPayout.findUnique({
+        where: { id: payoutId },
+      });
+
+      if (!payout) {
+        throw new Error('Payout not found');
+      }
+
+      if (payout.mentorId !== mentorClerkId) {
+        throw new Error('Not authorized');
+      }
+
+      if (payout.status !== 'REQUIRES_ONBOARDING') {
+        throw new Error('Payout is not awaiting onboarding');
+      }
+
+      // Get mentor
+      const mentor = await ctx.db.user.findUnique({
+        where: { clerkId: mentorClerkId },
+        select: { stripeAccountId: true },
+      });
+
+      if (!mentor?.stripeAccountId) {
+        throw new Error('Stripe account not found');
+      }
+
+      // Check account status
+      const account = await stripe.accounts.retrieve(mentor.stripeAccountId);
+
+      if (!account.payouts_enabled) {
+        return {
+          success: false,
+          message: 'Please complete additional verification steps',
+        };
+      }
+
+      // Get wallet
+      const wallet = await ctx.db.mentorWallet.findUnique({
+        where: { mentorId: mentorClerkId },
+      });
+
+      if (!wallet) {
+        throw new Error('Wallet not found');
+      }
+
+      // Process the transfer
+      try {
+        const transfer = await stripe.transfers.create({
+          amount: payout.amountCents,
+          currency: 'usd',
+          destination: mentor.stripeAccountId,
+          metadata: {
+            mentorClerkId,
+            payoutId: payout.id,
+          },
+        }, {
+          idempotencyKey: payout.idempotencyKey,
+        });
+
+        // Update records
+        await ctx.db.$transaction(async (tx) => {
+          await tx.mentorPayout.update({
+            where: { id: payoutId },
+            data: {
+              status: 'PAID',
+              stripeTransferId: transfer.id,
+            },
+          });
+
+          await tx.mentorLedgerEntry.create({
+            data: {
+              mentorId: mentorClerkId,
+              type: 'TRANSFER_CREATED',
+              amountCents: payout.amountCents,
+              relatedPayoutId: payoutId,
+              stripeTransferId: transfer.id,
+              description: 'Transfer sent after onboarding',
+            },
+          });
+
+          // Move from pending to completed (reduce pending balance)
+          await tx.mentorWallet.update({
+            where: { mentorId: mentorClerkId },
+            data: {
+              pendingCents: wallet.pendingCents - payout.amountCents,
+            },
+          });
+        });
+
+        return {
+          success: true,
+          transferId: transfer.id,
+          message: 'Transfer successful!',
+        };
+      } catch (error: any) {
+        // Update payout as failed
+        await ctx.db.mentorPayout.update({
+          where: { id: payoutId },
+          data: {
+            status: 'FAILED',
+            failureReason: error.message,
+          },
+        });
+
+        // Return pending amount to available
+        await ctx.db.mentorWallet.update({
+          where: { mentorId: mentorClerkId },
+          data: {
+            availableCents: wallet.availableCents + payout.amountCents,
+            pendingCents: wallet.pendingCents - payout.amountCents,
+          },
+        });
+
+        await ctx.db.mentorLedgerEntry.create({
+          data: {
+            mentorId: mentorClerkId,
+            type: 'TRANSFER_FAILED',
+            amountCents: 0,
+            relatedPayoutId: payoutId,
+            description: `Transfer failed: ${error.message}`,
+          },
+        });
+
+        throw new Error(`Transfer failed: ${error.message}`);
+      }
+    }),
+
+  // Get Stripe onboarding link (for continuing incomplete onboarding)
+  getStripeOnboardingLink: publicProcedure
+    .input(z.string()) // mentorClerkId
+    .mutation(async ({ ctx, input }) => {
+      const mentorClerkId = input;
+
+      const mentor = await ctx.db.user.findUnique({
+        where: { clerkId: mentorClerkId },
+        select: {
+          email: true,
+          firstName: true,
+          lastName: true,
+          stripeAccountId: true,
+        },
+      });
+
+      if (!mentor) {
+        throw new Error('Mentor not found');
+      }
+
+      let accountId = mentor.stripeAccountId;
+
+      // Create account if doesn't exist
+      if (!accountId) {
+        const account = await stripe.accounts.create({
+          type: 'express',
+          country: 'US',
+          email: mentor.email,
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+          business_type: 'individual',
+          individual: {
+            first_name: mentor.firstName,
+            last_name: mentor.lastName,
+            email: mentor.email,
+          },
+        });
+
+        accountId = account.id;
+
+        await ctx.db.user.update({
+          where: { clerkId: mentorClerkId },
+          data: {
+            stripeAccountId: account.id,
+            stripeChargesEnabled: account.charges_enabled,
+            stripePayoutsEnabled: account.payouts_enabled,
+            stripeRequirements: account.requirements as any,
+          },
+        });
+      }
+
+      const baseUrl = (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test')
+        ? 'http://localhost:3000' 
+        : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000');
+
+      const accountLink = await stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: `${baseUrl}/earnings?refresh=true`,
+        return_url: `${baseUrl}/earnings?onboarding=complete`,
+        type: 'account_onboarding',
+      });
+
+      return {
+        url: accountLink.url,
+        accountId,
+      };
+    }),
+
+  // Get mentor's Stripe account status
+  getMentorStripeStatus: publicProcedure
+    .input(z.string()) // mentorClerkId
+    .query(async ({ ctx, input }) => {
+      const mentor = await ctx.db.user.findUnique({
+        where: { clerkId: input },
+        select: {
+          stripeAccountId: true,
+          stripeChargesEnabled: true,
+          stripePayoutsEnabled: true,
+          stripeRequirements: true,
+        },
+      });
+
+      if (!mentor?.stripeAccountId) {
+        return {
+          hasAccount: false,
+          chargesEnabled: false,
+          payoutsEnabled: false,
+          requirements: null,
+        };
+      }
+
+      // Fetch latest from Stripe
+      const account = await stripe.accounts.retrieve(mentor.stripeAccountId);
+
+      // Update DB
+      await ctx.db.user.update({
+        where: { clerkId: input },
+        data: {
+          stripeChargesEnabled: account.charges_enabled,
+          stripePayoutsEnabled: account.payouts_enabled,
+          stripeRequirements: account.requirements as any,
+        },
+      });
+
+      return {
+        hasAccount: true,
+        accountId: account.id,
+        chargesEnabled: account.charges_enabled,
+        payoutsEnabled: account.payouts_enabled,
+        requirements: account.requirements,
+      };
+    }),
+
+  // Get mentor's payout history
+  getPayoutHistory: publicProcedure
+    .input(z.string()) // mentorClerkId
+    .query(async ({ ctx, input }) => {
+      return ctx.db.mentorPayout.findMany({
+        where: { mentorId: input },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      });
+    }),
+
 });

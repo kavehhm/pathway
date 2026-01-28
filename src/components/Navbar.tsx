@@ -53,8 +53,8 @@ const Navbar = () => {
         !tutor.data.major ||
         tutor.data.major === 'None' ||
         !tutor.data.hourlyRate ||
-        tutor.data.hourlyRate === 0 ||
-        !tutor.data.stripeAccountId;
+        tutor.data.hourlyRate === 0;
+        // Note: stripeAccountId no longer required - payment setup done on first withdrawal
 
       if (isIncomplete) {
         setHasRedirected(true);

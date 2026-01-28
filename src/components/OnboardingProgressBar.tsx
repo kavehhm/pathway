@@ -11,7 +11,7 @@ interface OnboardingProgressBarProps {
   hourlyRate: number | undefined;
   availability: any[] | undefined;
   meetingLink: string | undefined;
-  stripeAccountStatus: string | null | undefined;
+  stripeAccountStatus?: string | null | undefined; // Optional - no longer required for onboarding
   imageSrc: string | undefined;
 }
 
@@ -26,10 +26,10 @@ const OnboardingProgressBar: React.FC<OnboardingProgressBarProps> = ({
   hourlyRate,
   availability,
   meetingLink,
-  stripeAccountStatus,
   imageSrc,
 }) => {
   // Calculate completion for each section
+  // Note: Payment setup is now done separately via the Earnings page
   const checks = [
     { label: 'Profile Picture', completed: !!imageSrc && imageSrc !== '' && !imageSrc.includes('gravatar') },
     { label: 'Username', completed: !!username && username !== 'None' },
@@ -45,7 +45,6 @@ const OnboardingProgressBar: React.FC<OnboardingProgressBarProps> = ({
       completed: !!availability && availability.some(day => day.available && day.startTime && day.endTime)
     },
     { label: 'Meeting Link', completed: !!meetingLink && meetingLink !== '' },
-    { label: 'Payment Setup Approved', completed: stripeAccountStatus === 'active' },
   ];
 
   const completedCount = checks.filter(check => check.completed).length;
@@ -110,16 +109,16 @@ const OnboardingProgressBar: React.FC<OnboardingProgressBarProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <p className="text-sm font-semibold text-green-800">
-                Profile Complete! You&apos;re ready to start tutoring.
+                Profile complete! Click &quot;Update Profile&quot; to go live.
               </p>
             </div>
           </div>
         )}
 
         {progressPercentage < 100 && (
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-xs text-blue-800">
-              Complete all items to be visible to students on the platform.
+          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-xs text-yellow-800">
+              Complete all items and save to be visible to students.
             </p>
           </div>
         )}

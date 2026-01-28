@@ -101,18 +101,9 @@ export default function NewNav() {
               </Link>
             </DropdownMenu.Item>
             <DropdownMenu.Item asChild>
-              <button 
-                onClick={() => {
-                  if (tutor.data?.stripeAccountId) {
-                    window.open(`https://dashboard.stripe.com/${tutor.data.stripeAccountId}`, '_blank');
-                  } else {
-                    router.push('/tutor-onboarding#stripe');
-                  }
-                }} 
-                className="block w-full text-left px-2 py-2 rounded hover:bg-gray-100"
-              >
-                Payment Portal
-              </button>
+              <Link href="/earnings" className="block w-full text-left px-2 py-2 rounded hover:bg-gray-100">
+                Earnings
+              </Link>
             </DropdownMenu.Item>
             <DropdownMenu.Separator className="my-2 h-px bg-gray-200" />
             <DropdownMenu.Item asChild>

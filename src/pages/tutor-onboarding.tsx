@@ -27,7 +27,7 @@ import { TimePicker } from "antd";
 import { MdOutlineCancel } from "react-icons/md";
 import { CiCirclePlus } from "react-icons/ci";
 import { US_TIMEZONES } from "~/utils/timezones";
-import StripeConnectSetup from "~/components/StripeConnectSetup";
+// StripeConnectSetup removed - payment setup now done via Earnings page on first withdrawal
 import OnboardingProgressBar from "~/components/OnboardingProgressBar";
 import dayjs from 'dayjs';
 import emailjs from "@emailjs/browser";
@@ -1458,46 +1458,60 @@ export default function Example() {
             {/* Status Section */}
             <div className="rounded-2xl bg-white/70 backdrop-blur-sm shadow-xl border border-white/20 p-8">
               <div className="flex items-center gap-4 mb-8">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-                  <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                <div className={`flex h-12 w-12 items-center justify-center rounded-full ${tutor.data.approved ? 'bg-green-100' : 'bg-yellow-100'}`}>
+                  {tutor.data.approved ? (
+                    <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                    </svg>
+                  )}
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">
-                    Account Status
+                    Profile Status
                   </h2>
                   <p className="text-gray-600">
-                    Stripe takes 5-20 minutes to verify new profiles. Check back in then.
+                    {tutor.data.approved 
+                      ? 'Your profile is complete and visible to students!'
+                      : 'Complete all required fields to be visible to students.'}
                   </p>
                 </div>
               </div>
 
-              <div className="mb-8 p-6 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200">
+              <div className={`mb-8 p-6 rounded-xl ${tutor.data.approved ? 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200' : 'bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200'}`}>
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-8 w-8 items-center justify-center rounded-full ${tutor.data.stripeAccountStatus == "active" ? 'bg-green-100' : 'bg-red-100'}`}>
-                    {tutor.data.stripeAccountStatus == "active" ? (
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full ${tutor.data.approved ? 'bg-green-100' : 'bg-yellow-100'}`}>
+                    {tutor.data.approved ? (
                       <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     ) : (
-                      <svg className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <svg className="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
                       </svg>
                     )}
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Current status:</p>
-                    <p className={`font-bold ${tutor.data.stripeAccountStatus == "active" ? 'text-green-700' : 'text-red-700'}`}>
-                      {tutor.data.stripeAccountStatus == "active" ? 'Approved' : 'Not approved'}
+                    <p className={`font-bold ${tutor.data.approved ? 'text-green-700' : 'text-yellow-700'}`}>
+                      {tutor.data.approved ? 'Approved - Visible to Students' : 'Incomplete - Not Visible'}
                     </p>
                   </div>
                 </div>
+                {!tutor.data.approved && (
+                  <p className="mt-4 text-sm text-yellow-700">
+                    Fill in all required fields (marked with red icons) and click &quot;Update Profile&quot; to become visible to students.
+                  </p>
+                )}
               </div>
 
               <div className="text-sm text-gray-600 space-y-2">
-                <p>• To update the email being used, go to the name and profile icon for the option to change.</p>
-                <p>• Any change to your school, major, or GPA will require the restarting of the approval process.</p>
+                <p>• Your profile is automatically approved when all required fields are complete.</p>
+                <p>• To update your email, click on your profile picture above.</p>
+                <p>• Students can only see and book tutors with complete profiles.</p>
               </div>
 
             {/* University Email Verification - HIDDEN FOR NOW
@@ -1629,17 +1643,61 @@ export default function Example() {
             </div>
             */}
 
-            {/* Stripe Connect Setup Section */}
+            {/* Earnings Info Section */}
             <div className="mt-10 border-t border-gray-900/10 pt-10">
               <h2 className="text-base font-semibold leading-7 text-gray-900">
-                Payment Setup
+                Earnings & Payments
               </h2>
               <p className="mt-1 text-sm leading-6 text-gray-600">
-                Setup your payment account to receive payments from students. You will receive 90% of each session payment.
+                You&apos;ll receive 90% of each session payment. No payment setup required during signup!
               </p>
               
-              <div className="mt-6">
-                <StripeConnectSetup />
+              <div className="mt-6 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 flex-shrink-0">
+                    <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900">How Payments Work</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-gray-600">
+                      <li className="flex items-start gap-2">
+                        <span className="text-green-500 font-bold">1.</span>
+                        Complete your profile and start tutoring
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-green-500 font-bold">2.</span>
+                        Students book and pay for sessions (funds held by platform)
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-green-500 font-bold">3.</span>
+                        After sessions are completed, earnings are added to your balance
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-green-500 font-bold">4.</span>
+                        Withdraw anytime from your Earnings Dashboard
+                      </li>
+                    </ul>
+                    <div className="mt-4 flex flex-wrap items-center gap-4">
+                      <Link 
+                        href="/earnings"
+                        className="inline-flex items-center justify-center rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 transition-colors"
+                      >
+                        <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        View Earnings Dashboard
+                      </Link>
+                      <span className="text-sm text-gray-500">
+                        Platform fee: 10% | You receive: 90%
+                      </span>
+                    </div>
+                    <p className="mt-4 text-xs text-green-700 bg-green-100 rounded-lg px-3 py-2">
+                      <strong>Note:</strong> You&apos;ll complete payment verification (bank info, SSN) only when you make your first withdrawal - no upfront setup required!
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 

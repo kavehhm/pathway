@@ -411,19 +411,8 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
       return;
     }
 
-    // Check if tutor has set up their payment account
-    if (!tutor.data?.stripeAccountId) {
-      toast.error('This tutor has not set up their payment account yet. Please try again later.');
-      return;
-    }
-
-    // Show warning for pending accounts but allow booking
-    if (tutor.data?.stripeAccountStatus === 'pending') {
-      toast('This tutor is still verifying their payment account. Your booking will be processed once verification is complete.', {
-        duration: 4000,
-        icon: '⚠️',
-      });
-    }
+    // Note: Stripe account no longer required for tutors - payments go to platform first
+    // Tutors withdraw via wallet system
 
     // If first session is free and user checked the box, create booking directly
     if (tutor.data?.firstSessionFree && isFirstSession) {
@@ -753,23 +742,14 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
             </p>
           )}
           
-          {/* Payment Account Status */}
+          {/* Secure Payment Note */}
           <div className="mt-3 pt-3 border-t border-gray-200">
-            <p className="text-sm text-gray-600">
-              Payment Status: {' '}
-              {!tutor.data.stripeAccountId ? (
-                <span className="text-red-600 font-medium">Not set up</span>
-              ) : tutor.data.stripeAccountStatus === 'active' ? (
-                <span className="text-green-600 font-medium">Ready</span>
-              ) : (
-                <span className="text-yellow-600 font-medium">Pending verification</span>
-              )}
-            </p>
-            {tutor.data.stripeAccountStatus === 'pending' && (
-              <p className="text-xs text-gray-500 mt-1">
-                This tutor is still setting up their payment account. You can book now, but payment will be processed once their account is verified.
-              </p>
-            )}
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <span>Secure payment via Stripe</span>
+            </div>
           </div>
         </div>
       )}

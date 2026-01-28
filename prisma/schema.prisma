@@ -49,6 +49,10 @@ model User {
   timezone                 String         @default("PST")
   stripeAccountId          String?
   stripeAccountStatus      String?
+  // Expanded Stripe Connect fields for wallet + withdraw model
+  stripeChargesEnabled     Boolean        @default(false)
+  stripePayoutsEnabled     Boolean        @default(false)
+  stripeRequirements       Json?
   firstSessionFree         Boolean        @default(false)
   eduEmail                 String?        @db.VarChar(255)
   eduVerificationCode      String?        @db.VarChar(10)
@@ -64,25 +68,107 @@ model User {
   tutoredCourses           TutorCourse[]  @relation("TutorToCourses")
   reviewsReceived          Review[]       @relation("TutorReviews")
   reviewsGiven             Review[]       @relation("StudentReviews")
+  // Wallet relations
+  wallet                   MentorWallet?
+  ledgerEntries            MentorLedgerEntry[]
+  payouts                  MentorPayout[]
+}
+
+// ============= MENTOR WALLET SYSTEM =============
+
+model MentorWallet {
+  id            String   @id @default(uuid())
+  mentorId      String   @unique
+  mentor        User     @relation(fields: [mentorId], references: [clerkId])
+  // Available balance that can be withdrawn (in cents)
+  availableCents Int     @default(0)
+  // Pending balance (earnings from completed sessions not yet available for withdrawal)
+  pendingCents   Int     @default(0)
+  currency       String  @default("usd")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([mentorId])
+}
+
+enum LedgerEntryType {
+  SESSION_EARNED       // Earnings credited from a completed session
+  WITHDRAW_REQUESTED   // Withdraw request initiated
+  TRANSFER_CREATED     // Stripe transfer successfully created
+  TRANSFER_FAILED      // Stripe transfer failed
+  ADJUSTMENT           // Manual adjustment (admin)
+  PENDING_TO_AVAILABLE // Moved from pending to available balance
+}
+
+model MentorLedgerEntry {
+  id                String          @id @default(uuid())
+  mentorId          String
+  mentor            User            @relation(fields: [mentorId], references: [clerkId])
+  type              LedgerEntryType
+  amountCents       Int             // Positive for credits, negative for debits
+  balanceAfterCents Int?            // Snapshot of available balance after this entry
+  relatedSessionId  String?         // Booking ID if related to a session
+  relatedPayoutId   String?         // MentorPayout ID if related to a payout
+  stripeTransferId  String?         // Stripe transfer ID if applicable
+  stripePaymentIntentId String?     // Stripe PaymentIntent ID for session payments
+  description       String?         // Human-readable description
+  createdAt         DateTime        @default(now())
+
+  @@index([mentorId])
+  @@index([relatedSessionId])
+  @@index([relatedPayoutId])
+  @@index([createdAt])
+}
+
+enum PayoutStatus {
+  INITIATED           // Payout request started
+  REQUIRES_ONBOARDING // Mentor needs to complete Stripe onboarding
+  PROCESSING          // Transfer is being processed
+  PAID                // Successfully transferred
+  FAILED              // Transfer failed
+}
+
+model MentorPayout {
+  id               String       @id @default(uuid())
+  mentorId         String
+  mentor           User         @relation(fields: [mentorId], references: [clerkId])
+  amountCents      Int          // Amount requested for withdrawal
+  status           PayoutStatus @default(INITIATED)
+  stripeTransferId String?      // Stripe transfer ID once created
+  failureReason    String?      // Reason if transfer failed
+  idempotencyKey   String       @unique // Prevent duplicate transfers
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([mentorId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model Booking {
-  id             String   @id @default(uuid())
-  tutorId        String
-  date           DateTime
-  time           String
-  status         String   @default("confirmed")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  free           Boolean  @default(false)
-  studentClerkId String?
-  tutor          User     @relation("TutorBookings", fields: [tutorId], references: [clerkId])
-  review         Review?  @relation("BookingReview")
+  id                    String   @id @default(uuid())
+  tutorId               String
+  date                  DateTime
+  time                  String
+  status                String   @default("confirmed")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  free                  Boolean  @default(false)
+  studentClerkId        String?
+  // Payment tracking for wallet system
+  stripePaymentIntentId String?  // Stripe PaymentIntent ID
+  totalAmountCents      Int?     // Total amount charged to student (in cents)
+  platformFeeCents      Int?     // Platform fee amount (in cents)
+  mentorEarningsCents   Int?     // Amount mentor earns (total - platform fee)
+  earningsProcessed     Boolean  @default(false) // Whether earnings have been added to wallet
+  tutor                 User     @relation("TutorBookings", fields: [tutorId], references: [clerkId])
+  review                Review?  @relation("BookingReview")
 
   @@unique([tutorId, date, time])
   @@index([tutorId])
   @@index([date])
   @@index([studentClerkId])
+  @@index([stripePaymentIntentId])
 }
 
 model Course {

@@ -28,9 +28,9 @@ export default function CustomUserMenu() {
           <DropdownMenu.Item asChild>
             <Link href={"/tutor-onboarding"} className="block w-full text-left px-2 py-2 rounded hover:bg-gray-100">Manage Account</Link>
           </DropdownMenu.Item>
-          {tutor.data?.stripeAccountStatus == "active" && <DropdownMenu.Item asChild>
-            <Link href={`https://connect.stripe.com/app/express#${tutor.data?.stripeAccountId}`} target="_blank" rel="noopener noreferrer" className="block w-full text-left px-2 py-2 rounded hover:bg-gray-100">Payment Portal</Link>
-          </DropdownMenu.Item>}
+          <DropdownMenu.Item asChild>
+            <Link href="/earnings" className="block w-full text-left px-2 py-2 rounded hover:bg-gray-100">Earnings</Link>
+          </DropdownMenu.Item>
           <DropdownMenu.Separator className="my-2 h-px bg-gray-200" />
           <DropdownMenu.Item asChild>
             <button onClick={() => signOut(() => router.push('/'))} className="block w-full text-left px-2 py-2 rounded hover:bg-gray-100">Sign Out</button>
