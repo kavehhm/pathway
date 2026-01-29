@@ -2116,4 +2116,170 @@ export const postRouter = createTRPCRouter({
       });
     }),
 
+  // ============= ADMIN DASHBOARD =============
+
+  // Get admin dashboard stats
+  getAdminDashboardStats: publicProcedure
+    .input(z.string()) // adminClerkId for authorization
+    .query(async ({ ctx, input }) => {
+      // Check if user is an admin
+      const adminIds = (process.env.ADMIN_CLERK_IDS ?? '').split(',').map(id => id.trim());
+      if (!adminIds.includes(input)) {
+        throw new Error('Unauthorized: Admin access required');
+      }
+
+      // Get all mentor wallets - money owed to mentors
+      const wallets = await ctx.db.mentorWallet.findMany({
+        select: {
+          availableCents: true,
+          pendingCents: true,
+          mentor: {
+            select: {
+              firstName: true,
+              lastName: true,
+              clerkId: true,
+            },
+          },
+        },
+      });
+
+      const totalOwedToMentors = wallets.reduce(
+        (sum, w) => sum + w.availableCents + w.pendingCents,
+        0
+      );
+      const totalAvailableToMentors = wallets.reduce(
+        (sum, w) => sum + w.availableCents,
+        0
+      );
+      const totalPendingToMentors = wallets.reduce(
+        (sum, w) => sum + w.pendingCents,
+        0
+      );
+
+      // Get booking stats
+      const bookings = await ctx.db.booking.findMany({
+        where: {
+          free: false,
+          totalAmountCents: { not: null },
+        },
+        select: {
+          totalAmountCents: true,
+          platformFeeCents: true,
+          mentorEarningsCents: true,
+          earningsProcessed: true,
+          createdAt: true,
+        },
+      });
+
+      const totalBookings = await ctx.db.booking.count({
+        where: { free: false },
+      });
+      const freeBookings = await ctx.db.booking.count({
+        where: { free: true },
+      });
+
+      const totalRevenue = bookings.reduce(
+        (sum, b) => sum + (b.totalAmountCents ?? 0),
+        0
+      );
+      const totalPlatformFees = bookings.reduce(
+        (sum, b) => sum + (b.platformFeeCents ?? 0),
+        0
+      );
+      const totalMentorEarnings = bookings.reduce(
+        (sum, b) => sum + (b.mentorEarningsCents ?? 0),
+        0
+      );
+
+      // Get completed payouts to mentors
+      const completedPayouts = await ctx.db.mentorPayout.aggregate({
+        where: { status: 'PAID' },
+        _sum: { amountCents: true },
+        _count: true,
+      });
+
+      // Get pending/processing payouts
+      const pendingPayouts = await ctx.db.mentorPayout.findMany({
+        where: {
+          status: { in: ['INITIATED', 'REQUIRES_ONBOARDING', 'PROCESSING'] },
+        },
+        include: {
+          mentor: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Calculate safe to withdraw
+      // Platform keeps: total revenue - total owed to mentors - already paid out
+      const alreadyPaidToMentors = completedPayouts._sum.amountCents ?? 0;
+      const safeToWithdraw = totalPlatformFees;
+
+      // Get mentor breakdown for detailed view
+      const mentorBreakdown = wallets
+        .filter(w => w.availableCents > 0 || w.pendingCents > 0)
+        .map(w => ({
+          name: `${w.mentor.firstName} ${w.mentor.lastName}`,
+          clerkId: w.mentor.clerkId,
+          available: w.availableCents,
+          pending: w.pendingCents,
+          total: w.availableCents + w.pendingCents,
+        }))
+        .sort((a, b) => b.total - a.total);
+
+      // Get recent bookings for activity
+      const recentBookings = await ctx.db.booking.findMany({
+        where: { free: false },
+        include: {
+          tutor: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      });
+
+      return {
+        // Summary stats
+        totalOwedToMentors,
+        totalAvailableToMentors,
+        totalPendingToMentors,
+        safeToWithdraw,
+        
+        // Booking stats
+        totalBookings,
+        freeBookings,
+        paidBookings: totalBookings,
+        totalRevenue,
+        totalPlatformFees,
+        totalMentorEarnings,
+        
+        // Payout stats
+        alreadyPaidToMentors,
+        completedPayoutCount: completedPayouts._count,
+        pendingPayouts,
+        
+        // Detailed breakdowns
+        mentorBreakdown,
+        recentBookings: recentBookings.map(b => ({
+          id: b.id,
+          tutorName: `${b.tutor.firstName} ${b.tutor.lastName}`,
+          date: b.date,
+          time: b.time,
+          totalAmount: b.totalAmountCents,
+          platformFee: b.platformFeeCents,
+          mentorEarnings: b.mentorEarningsCents,
+          earningsProcessed: b.earningsProcessed,
+          createdAt: b.createdAt,
+        })),
+      };
+    }),
+
 });
