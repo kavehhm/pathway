@@ -10,10 +10,16 @@ import { api } from "~/utils/api";
 import PortalMultiselect from "~/components/PortalMultiselect";
 
 const FEATURED_SCHOOLS = [
-  { name: "UCLA", logo: "/ucla.png" },
+  { name: "Harvard", logo: "/harvard.png" },
+  { name: "Caltech", logo: "/caltech.png" },
   { name: "Cornell", logo: "/cornell.png" },
-  { name: "Northwestern", logo: "/northwestern.png" },
+  { name: "UPenn", logo: "/upenn.png" },
   { name: "Brown", logo: "/brown.png" },
+  { name: "Berkeley", logo: "/berkeley.png" },
+  { name: "UCLA", logo: "/ucla.png" },
+  { name: "Duke", logo: "/duke.png" },
+  { name: "Northwestern", logo: "/northwestern.png" },
+
 ];
 
 
@@ -362,21 +368,27 @@ export default function Home() {
               <h2 className="text-center text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">
                 Trusted by students heading to
               </h2>
-              <div className="mt-8 grid grid-cols-2 gap-8 sm:grid-cols-4">
-                {FEATURED_SCHOOLS.map((school) => (
-                  <div
-                    key={school.name}
-                    className="flex items-center justify-center rounded-2xl bg-white/70 p-4 shadow-sm backdrop-blur-sm"
-                  >
-                    <Image
-                      src={school.logo}
-                      alt={school.name}
-                      width={120}
-                      height={40}
-                      className="h-12 w-auto object-contain"
-                    />
-                  </div>
-                ))}
+              <div className="relative mt-8 overflow-hidden">
+                {/* Fade edges */}
+                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-gradient-to-r from-[#f5f3ff] to-transparent" />
+                <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-gradient-to-l from-[#f5f3ff] to-transparent" />
+                {/* Marquee track */}
+                <div className="flex w-max animate-marquee">
+                  {[...FEATURED_SCHOOLS, ...FEATURED_SCHOOLS].map((school, i) => (
+                    <div
+                      key={`${school.name}-${i}`}
+                      className="mx-6 flex flex-shrink-0 items-center justify-center rounded-2xl bg-white/70 px-8 py-4 shadow-sm backdrop-blur-sm"
+                    >
+                      <Image
+                        src={school.logo}
+                        alt={school.name}
+                        width={120}
+                        height={40}
+                        className="h-12 w-auto object-contain"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </section>
 
