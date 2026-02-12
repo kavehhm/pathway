@@ -80,7 +80,7 @@ export function calculateEndTime(startTime: string): string {
 export async function sendBookingConfirmationEmails(
   params: BookingEmailParams
 ): Promise<{ tutorEmail: { success: boolean; error?: string }; studentEmail: { success: boolean; error?: string } }> {
-  const meetingLinkDisplay = params.meetingLink || 'N/A';
+  const meetingLinkDisplay = params.meetingLink ?? 'N/A';
 
   // Prepare tutor email (in tutor's timezone)
   const tutorTemplate = tutorBookingConfirmationEmail({
@@ -93,7 +93,7 @@ export async function sendBookingConfirmationEmails(
     studentEmail: params.studentEmail,
     tutorEmail: params.tutorEmail,
     meetingLink: meetingLinkDisplay,
-    calendarLink: params.calendarLink || undefined,
+    calendarLink: params.calendarLink ?? undefined,
   });
 
   // Prepare student email (in student's timezone)
@@ -107,7 +107,7 @@ export async function sendBookingConfirmationEmails(
     studentEmail: params.studentEmail,
     tutorEmail: params.tutorEmail,
     meetingLink: meetingLinkDisplay,
-    calendarLink: params.calendarLink || undefined,
+    calendarLink: params.calendarLink ?? undefined,
   });
 
   console.log('Sending booking confirmation emails via SES...');
@@ -145,7 +145,7 @@ export async function sendSchedulingFailureNotification(
   studentName: string,
   error: string
 ): Promise<void> {
-  const adminEmail = process.env.ADMIN_EMAIL || 'support@pathwaytutors.com';
+  const adminEmail = process.env.ADMIN_EMAIL ?? 'support@pathwaytutors.com';
 
   console.error(`Scheduling failed for booking ${bookingId}:`, error);
   console.error(`Tutor: ${tutorName}, Student: ${studentName}`);

@@ -58,10 +58,10 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
   const toAddresses = Array.isArray(to) ? to : [to];
 
   // Generate plain text from HTML if not provided
-  const plainText = text || htmlToPlainText(html);
+  const plainText = text ?? htmlToPlainText(html);
 
   const emailParams: SendEmailCommandInput = {
-    Source: from || emailConfig.fromAddress,
+    Source: from ?? emailConfig.fromAddress,
     Destination: {
       ToAddresses: toAddresses,
     },
@@ -81,7 +81,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
         },
       },
     },
-    ReplyToAddresses: [replyTo || emailConfig.replyToAddress],
+    ReplyToAddresses: [replyTo ?? emailConfig.replyToAddress],
   };
 
   try {

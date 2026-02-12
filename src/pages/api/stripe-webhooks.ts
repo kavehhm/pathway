@@ -196,11 +196,11 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   }
 
   // Extract booking info from PaymentIntent metadata
-  const studentName = paymentIntent.metadata.studentName || booking.studentName || 'Student';
-  const studentEmail = paymentIntent.metadata.studentEmail || booking.studentEmail;
+  const studentName = paymentIntent.metadata.studentName ?? booking.studentName ?? 'Student';
+  const studentEmail = paymentIntent.metadata.studentEmail ?? booking.studentEmail;
   const tutorName = `${booking.tutor.firstName} ${booking.tutor.lastName}`;
   const tutorEmail = booking.tutor.email;
-  const tutorTimezone = booking.tutor.timezone || 'America/Los_Angeles';
+  const tutorTimezone = booking.tutor.timezone ?? 'America/Los_Angeles';
 
   if (!studentEmail) {
     console.error(`No student email for booking ${booking.id}, cannot send invites`);
@@ -213,7 +213,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   const tutorMeetingLink = booking.tutor.meetingLink;
   const useGoogleMeet = !isValidUrl(tutorMeetingLink);
 
-  let meetLink = tutorMeetingLink || '';
+  let meetLink = tutorMeetingLink ?? '';
   let calendarEventId = '';
   let calendarHtmlLink = '';
 
@@ -224,7 +224,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       
       // Parse the booking date and time
       const { startTime, endTime } = parseBookingDateTime(
-        booking.date.toISOString().split('T')[0] || '',
+        booking.date.toISOString().split('T')[0] ?? '',
         booking.time,
         tutorTimezone
       );
@@ -265,11 +265,11 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       // );
       
       // Still try to use the tutor's meeting link as fallback
-      meetLink = tutorMeetingLink || '';
+      meetLink = tutorMeetingLink ?? '';
     }
   } else {
     console.log(`Using tutor's meeting link: ${tutorMeetingLink}`);
-    meetLink = tutorMeetingLink || '';
+    meetLink = tutorMeetingLink ?? '';
   }
 
   // Update the booking with calendar/meeting info

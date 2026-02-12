@@ -45,9 +45,9 @@ export function getSESClient(): SESClient {
  */
 export const emailConfig = {
   get fromAddress(): string {
-    return process.env.SES_FROM_ADDRESS || 'noreply@pathwaytutors.com';
+    return process.env.SES_FROM_ADDRESS ?? 'noreply@pathwaytutors.com';
   },
   get replyToAddress(): string {
-    return process.env.SES_REPLY_TO_ADDRESS || 'support@pathwaytutors.com';
+    return process.env.SES_REPLY_TO_ADDRESS ?? 'support@pathwaytutors.com';
   },
 };

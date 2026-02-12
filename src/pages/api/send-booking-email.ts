@@ -42,7 +42,7 @@ interface SendBookingEmailResponse {
   error?: string;
 }
 
-export default async function handler(
+export default function handler(
   req: NextApiRequest,
   res: NextApiResponse<SendBookingEmailResponse>
 ) {

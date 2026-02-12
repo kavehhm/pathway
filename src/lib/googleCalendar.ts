@@ -5,7 +5,7 @@
  * Uses OAuth2 with a refresh token for the Workspace organizer account.
  */
 
-import { google, calendar_v3 } from 'googleapis';
+import { google, type calendar_v3 } from 'googleapis';
 
 // Types for the module
 export interface CalendarEventDetails {
@@ -44,7 +44,7 @@ function getGoogleCalendarClient(): calendar_v3.Calendar {
   const oauth2Client = new google.auth.OAuth2(
     clientId,
     clientSecret,
-    process.env.GOOGLE_REDIRECT_URI || 'https://pathwaytutors.com/api/auth/google/callback'
+    process.env.GOOGLE_REDIRECT_URI ?? 'https://pathwaytutors.com/api/auth/google/callback'
   );
 
   oauth2Client.setCredentials({
@@ -66,7 +66,7 @@ export async function createMeetEvent(
   details: CalendarEventDetails
 ): Promise<CalendarEventResult> {
   const calendar = getGoogleCalendarClient();
-  const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
+  const calendarId = process.env.GOOGLE_CALENDAR_ID ?? 'primary';
 
   // Generate a unique request ID for conference creation
   const requestId = `pt-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
@@ -144,8 +144,8 @@ export async function createMeetEvent(
 
     return {
       eventId: createdEvent.id,
-      meetLink: meetLink || '',
-      htmlLink: createdEvent.htmlLink || '',
+      meetLink: meetLink ?? '',
+      htmlLink: createdEvent.htmlLink ?? '',
     };
   } catch (error: any) {
     console.error('Error creating Google Calendar event:', error);
@@ -171,7 +171,7 @@ export async function createMeetEvent(
  */
 export async function deleteCalendarEvent(eventId: string): Promise<void> {
   const calendar = getGoogleCalendarClient();
-  const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
+  const calendarId = process.env.GOOGLE_CALENDAR_ID ?? 'primary';
 
   try {
     await calendar.events.delete({
@@ -192,7 +192,7 @@ export async function deleteCalendarEvent(eventId: string): Promise<void> {
  */
 export async function getCalendarEvent(eventId: string): Promise<calendar_v3.Schema$Event | null> {
   const calendar = getGoogleCalendarClient();
-  const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
+  const calendarId = process.env.GOOGLE_CALENDAR_ID ?? 'primary';
 
   try {
     const response = await calendar.events.get({
@@ -244,7 +244,7 @@ Need help? Contact support@pathwaytutors.com
 export function parseBookingDateTime(
   dateStr: string,
   timeStr: string,
-  timezone: string
+  _timezone: string
 ): { startTime: Date; endTime: Date } {
   // Parse the time string (e.g., "9:00 AM" or "2:30 PM")
   const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
