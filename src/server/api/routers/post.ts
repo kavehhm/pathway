@@ -5,6 +5,7 @@ import path from "path";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { getSchoolPrestigeRank } from "~/schoolPrestige";
+import { isValidUrl } from "~/lib/validateUrl";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
@@ -380,7 +381,11 @@ export const postRouter = createTRPCRouter({
         const hasMajor = !!major && major !== 'None' && major.trim() !== '';
         const hasGpa = !!gpa && gpa > 0;
         const hasSubjects = !!subjects && subjects.length > 0;
-        const hasMeetingLink = !!meetingLink && meetingLink.trim() !== '';
+        
+        // Meeting link is now OPTIONAL for approval
+        // If provided, it must be a valid URL (not just text like "Google meets")
+        const meetingLinkProvided = !!meetingLink && meetingLink.trim() !== '';
+        const isValidMeetingLinkUrl = meetingLinkProvided ? isValidUrl(meetingLink) : true;
         
         // Check if at least one availability slot has both start and end time
         const hasValidAvailability = availability.some(
@@ -388,6 +393,7 @@ export const postRouter = createTRPCRouter({
         );
 
         // Auto-approve if all required fields are complete
+        // Meeting link is optional - if provided it must be valid, if not provided that's OK
         const shouldBeApproved = 
           hasValidImage &&
           hasUsername &&
@@ -398,7 +404,7 @@ export const postRouter = createTRPCRouter({
           hasMajor &&
           hasGpa &&
           hasSubjects &&
-          hasMeetingLink &&
+          isValidMeetingLinkUrl && // Only blocks approval if an INVALID link is provided
           hasValidAvailability;
 
         console.log('Auto-approval check:', {
@@ -411,7 +417,8 @@ export const postRouter = createTRPCRouter({
           hasMajor,
           hasGpa,
           hasSubjects,
-          hasMeetingLink,
+          meetingLinkProvided,
+          isValidMeetingLinkUrl,
           hasValidAvailability,
           shouldBeApproved,
         });
@@ -1064,6 +1071,12 @@ export const postRouter = createTRPCRouter({
           return { id: existing.id, conflicted: true as const };
         }
 
+        // Get tutor email for calendar integration
+        const tutorData = await ctx.db.user.findUnique({
+          where: { clerkId: tutorId },
+          select: { email: true }
+        });
+
         // Create a booking record with payment information for wallet processing
         const booking = await ctx.db.booking.create({
           data: {
@@ -1077,6 +1090,10 @@ export const postRouter = createTRPCRouter({
             platformFeeCents: platformFee,
             mentorEarningsCents: tutorAmount,
             earningsProcessed: false, // Will be set true when session is completed and earnings added
+            // Store student and tutor info for calendar/email integration
+            studentEmail,
+            studentName,
+            tutorEmail: tutorData?.email,
           }
         });
 

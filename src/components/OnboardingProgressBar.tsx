@@ -30,6 +30,7 @@ const OnboardingProgressBar: React.FC<OnboardingProgressBarProps> = ({
 }) => {
   // Calculate completion for each section
   // Note: Payment setup is now done separately via the Earnings page
+  // Note: Meeting Link is now OPTIONAL - if not provided, Google Meet will be auto-generated
   const checks = [
     { label: 'Profile Picture', completed: !!imageSrc && imageSrc !== '' && !imageSrc.includes('gravatar') },
     { label: 'Username', completed: !!username && username !== 'None' },
@@ -44,7 +45,9 @@ const OnboardingProgressBar: React.FC<OnboardingProgressBarProps> = ({
       label: 'Availability', 
       completed: !!availability && availability.some(day => day.available && day.startTime && day.endTime)
     },
-    { label: 'Meeting Link', completed: !!meetingLink && meetingLink !== '' },
+    // Meeting link is optional - always counts as completed
+    // If not provided, Google Meet link will be auto-generated at booking time
+    { label: 'Meeting Link (Optional)', completed: true },
   ];
 
   const completedCount = checks.filter(check => check.completed).length;

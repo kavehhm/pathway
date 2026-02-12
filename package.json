@@ -17,6 +17,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-ses": "^3.984.0",
     "@calcom/embed-react": "^1.4.0",
     "@clerk/nextjs": "^4.27.1",
     "@emailjs/browser": "^4.4.1",
@@ -36,6 +37,7 @@
     "aos": "^2.3.4",
     "buffer": "^6.0.3",
     "dayjs": "^1.11.12",
+    "googleapis": "^171.3.0",
     "micro": "^10.0.1",
     "multiselect-react-dropdown": "^2.0.25",
     "next": "^14.0.0",

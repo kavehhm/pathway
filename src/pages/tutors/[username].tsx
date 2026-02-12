@@ -13,7 +13,6 @@ import { FaEdit } from "react-icons/fa";
 import { useUser, useClerk } from "@clerk/nextjs";
 import Cal from "@calcom/embed-react";
 import { getCalApi } from "@calcom/embed-react";
-import emailjs from "@emailjs/browser";
 import ManualCal from "~/components/ManualCal";
 import { TbFreeRights } from "react-icons/tb";
 import toast from "react-hot-toast";
@@ -117,36 +116,45 @@ const User = () => {
             location: e.detail.data.booking.location,
           };
 
-          console.log(formParams);
-          // To tutor
-          emailjs
-            .send("service_z8zzszl", "template_z7etjno", formParams, {
-              publicKey: "To4xMN8D9pz4wwmq8",
+          console.log('Sending booking confirmation emails via API...');
+          
+          // Send emails via server-side API route
+          fetch('/api/send-booking-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'both',
+              params: {
+                tutorName: firstName,
+                // @ts-expect-error Cal.com types
+                studentName: e.detail.data.booking.attendees[0].name,
+                date: new Date(
+                  // @ts-expect-error Cal.com types
+                  e.detail.data.booking.startTime,
+                ).toLocaleDateString(),
+                startTime: startDate,
+                endTime: endDate,
+                // @ts-expect-error Cal.com types
+                timeZone: e.detail.data.timeZone,
+                // @ts-expect-error Cal.com types
+                studentEmail: e.detail.data.booking.attendees[0].email,
+                tutorEmail: email,
+                // @ts-expect-error Cal.com types
+                meetingLink: e.detail.data.booking.location ?? 'N/A',
+              },
+            }),
+          })
+            .then((res) => res.json())
+            .then((result) => {
+              if (result.success) {
+                console.log('Booking confirmation emails sent successfully');
+              } else {
+                console.error('Failed to send some emails:', result);
+              }
             })
-            .then(
-              (result) => {
-                console.log("We have received your message!");
-                // form.current.reset();
-              },
-              (error) => {
-                console.log(error);
-              },
-            );
-            
-            // To student
-            emailjs
-            .send("service_z8zzszl", "template_gvkyabt", formParams, {
-              publicKey: "To4xMN8D9pz4wwmq8",
-            })
-            .then(
-              (result) => {
-                console.log("We have received your message!");
-                // form.current.reset();
-              },
-              (error) => {
-                console.log(error);
-              },
-            );
+            .catch((error) => {
+              console.error('Error sending booking emails:', error);
+            });
         },
       });
     }

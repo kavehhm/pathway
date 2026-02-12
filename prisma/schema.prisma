@@ -161,6 +161,15 @@ model Booking {
   platformFeeCents      Int?     // Platform fee amount (in cents)
   mentorEarningsCents   Int?     // Amount mentor earns (total - platform fee)
   earningsProcessed     Boolean  @default(false) // Whether earnings have been added to wallet
+  // Student info for calendar and emails
+  studentEmail          String?  // Student's email for calendar invites
+  studentName           String?  // Student's name
+  // Tutor email captured at booking time
+  tutorEmail            String?  // Tutor's email for calendar invites
+  // Google Calendar integration
+  calendarEventId       String?  // Google Calendar event ID
+  meetLink              String?  // Google Meet link (or tutor's custom meeting link)
+  calendarHtmlLink      String?  // Google Calendar event link for viewing
   tutor                 User     @relation("TutorBookings", fields: [tutorId], references: [clerkId])
   review                Review?  @relation("BookingReview")
 
@@ -169,6 +178,7 @@ model Booking {
   @@index([date])
   @@index([studentClerkId])
   @@index([stripePaymentIntentId])
+  @@index([calendarEventId])
 }
 
 model Course {

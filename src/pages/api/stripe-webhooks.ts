@@ -2,6 +2,19 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { buffer } from 'micro';
 import Stripe from 'stripe';
 import { db } from '~/server/db';
+import {
+  createMeetEvent,
+  formatBookingForCalendar,
+  parseBookingDateTime,
+  type CalendarEventDetails,
+} from '~/lib/googleCalendar';
+// Amazon SES emails commented out - using EmailJS until SES production access is granted
+// import {
+//   sendBookingConfirmationEmails,
+//   sendSchedulingFailureNotification,
+//   calculateEndTime,
+// } from '~/lib/sendBookingEmails';
+import { isValidUrl } from '~/lib/validateUrl';
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
@@ -29,7 +42,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const sig = req.headers['stripe-signature'] as string;
-  const rawBody = await buffer(req);
+  
+  let rawBody: Buffer;
+  try {
+    rawBody = await buffer(req);
+  } catch (err: any) {
+    console.error('Error reading request body:', err.message);
+    return res.status(400).json({ error: 'Failed to read request body' });
+  }
 
   let event: Stripe.Event;
 
@@ -40,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: `Webhook Error: ${err.message}` });
   }
 
-  console.log(`Received Stripe webhook: ${event.type}`);
+  console.log(`Received Stripe webhook: ${event.type}, event ID: ${event.id}`);
 
   try {
     switch (event.type) {
@@ -50,7 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
-      // Handle successful payments (for audit trail)
+      // Handle successful payments - THIS NOW TRIGGERS CALENDAR + EMAIL
       case 'payment_intent.succeeded': {
         await handlePaymentIntentSucceeded(event.data.object);
         break;
@@ -79,10 +99,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log(`Unhandled event type: ${event.type}`);
     }
 
+    // IMPORTANT: Always return 200 to acknowledge receipt
+    // Even if processing fails internally, we don't want Stripe to keep retrying
     return res.status(200).json({ received: true });
-  } catch (error) {
-    console.error('Error processing webhook:', error);
-    return res.status(500).json({ error: 'Webhook handler failed' });
+  } catch (error: any) {
+    // Log the error but still return 200 to prevent webhook retries
+    // The error is logged and can be investigated via logs
+    console.error('Error processing webhook:', error?.message || error);
+    
+    // Return 200 anyway to acknowledge receipt and stop retries
+    // Errors are handled internally (e.g., marking booking as SCHEDULING_FAILED)
+    return res.status(200).json({ received: true, error: 'Internal processing error logged' });
   }
 }
 
@@ -132,19 +159,187 @@ async function handleAccountUpdated(account: Stripe.Account) {
 }
 
 // Handle successful payment intents
+// This is the main handler that creates calendar events and sends emails
 async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
   console.log(`PaymentIntent succeeded: ${paymentIntent.id}`);
 
-  // Update booking if we can find it
+  // Find the booking associated with this payment
   const booking = await db.booking.findFirst({
     where: { stripePaymentIntentId: paymentIntent.id },
+    include: {
+      tutor: {
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+          meetingLink: true,
+          timezone: true,
+          clerkId: true,
+        },
+      },
+    },
   });
 
-  if (booking) {
-    console.log(`Found booking for PaymentIntent: ${booking.id}`);
-    // Payment already confirmed - this is just for audit trail
-  } else {
+  if (!booking) {
     console.log(`No booking found for PaymentIntent: ${paymentIntent.id}`);
+    // This might happen if the booking hasn't been created yet
+    // The booking is created via the bookSession mutation which runs after payment confirmation
+    return;
+  }
+
+  console.log(`Found booking ${booking.id} for PaymentIntent: ${paymentIntent.id}`);
+
+  // IDEMPOTENCY CHECK: If we already have a calendar event, don't create another
+  if (booking.calendarEventId) {
+    console.log(`Booking ${booking.id} already has calendar event ${booking.calendarEventId}, skipping`);
+    return;
+  }
+
+  // Extract booking info from PaymentIntent metadata
+  const studentName = paymentIntent.metadata.studentName || booking.studentName || 'Student';
+  const studentEmail = paymentIntent.metadata.studentEmail || booking.studentEmail;
+  const tutorName = `${booking.tutor.firstName} ${booking.tutor.lastName}`;
+  const tutorEmail = booking.tutor.email;
+  const tutorTimezone = booking.tutor.timezone || 'America/Los_Angeles';
+
+  if (!studentEmail) {
+    console.error(`No student email for booking ${booking.id}, cannot send invites`);
+    await markBookingSchedulingFailed(booking.id, 'Missing student email');
+    return;
+  }
+
+  // Determine which meeting link to use
+  // If tutor has a valid meeting link, use that. Otherwise, generate Google Meet
+  const tutorMeetingLink = booking.tutor.meetingLink;
+  const useGoogleMeet = !isValidUrl(tutorMeetingLink);
+
+  let meetLink = tutorMeetingLink || '';
+  let calendarEventId = '';
+  let calendarHtmlLink = '';
+
+  if (useGoogleMeet) {
+    // Create Google Calendar event with Google Meet
+    try {
+      console.log(`Creating Google Calendar event for booking ${booking.id}`);
+      
+      // Parse the booking date and time
+      const { startTime, endTime } = parseBookingDateTime(
+        booking.date.toISOString().split('T')[0] || '',
+        booking.time,
+        tutorTimezone
+      );
+
+      // Format the event details
+      const { summary, description } = formatBookingForCalendar(tutorName, studentName);
+
+      const eventDetails: CalendarEventDetails = {
+        summary,
+        description,
+        startTime,
+        endTime,
+        timezone: tutorTimezone,
+        tutorEmail,
+        studentEmail,
+        tutorName,
+        studentName,
+      };
+
+      const calendarResult = await createMeetEvent(eventDetails);
+      
+      meetLink = calendarResult.meetLink;
+      calendarEventId = calendarResult.eventId;
+      calendarHtmlLink = calendarResult.htmlLink;
+
+      console.log(`Created calendar event ${calendarEventId} with Meet link: ${meetLink}`);
+    } catch (error: any) {
+      console.error(`Failed to create calendar event for booking ${booking.id}:`, error);
+      // Mark as scheduling failed but continue to try sending emails
+      await markBookingSchedulingFailed(booking.id, error.message);
+      
+      // Amazon SES commented out - using EmailJS until SES production access is granted
+      // await sendSchedulingFailureNotification(
+      //   booking.id,
+      //   tutorName,
+      //   studentName,
+      //   error.message
+      // );
+      
+      // Still try to use the tutor's meeting link as fallback
+      meetLink = tutorMeetingLink || '';
+    }
+  } else {
+    console.log(`Using tutor's meeting link: ${tutorMeetingLink}`);
+    meetLink = tutorMeetingLink || '';
+  }
+
+  // Update the booking with calendar/meeting info
+  try {
+    await db.booking.update({
+      where: { id: booking.id },
+      data: {
+        studentEmail,
+        studentName,
+        tutorEmail,
+        meetLink: meetLink || null,
+        calendarEventId: calendarEventId || null,
+        calendarHtmlLink: calendarHtmlLink || null,
+      },
+    });
+    console.log(`Updated booking ${booking.id} with meeting info`);
+  } catch (error: any) {
+    console.error(`Failed to update booking ${booking.id} with meeting info:`, error);
+  }
+
+  // Amazon SES confirmation emails commented out - using EmailJS on client side until SES production access is granted
+  // Emails are sent via EmailJS from ManualCal.tsx and PaymentForm.tsx on the client side
+  // try {
+  //   const endTime = calculateEndTime(booking.time);
+  //   const dateStr = booking.date.toLocaleDateString('en-US', {
+  //     weekday: 'long',
+  //     year: 'numeric',
+  //     month: 'long',
+  //     day: 'numeric',
+  //   });
+  //
+  //   const emailResult = await sendBookingConfirmationEmails({
+  //     tutorName,
+  //     studentName,
+  //     tutorEmail,
+  //     studentEmail,
+  //     date: dateStr,
+  //     startTime: booking.time,
+  //     endTime,
+  //     tutorTimezone,
+  //     studentTimezone: tutorTimezone,
+  //     meetingLink: meetLink || null,
+  //     calendarLink: calendarHtmlLink || null,
+  //   });
+  //
+  //   console.log(`Email results - Tutor: ${emailResult.tutorEmail.success}, Student: ${emailResult.studentEmail.success}`);
+  //   
+  //   if (!emailResult.tutorEmail.success) {
+  //     console.error(`Failed to send tutor email:`, emailResult.tutorEmail.error);
+  //   }
+  //   if (!emailResult.studentEmail.success) {
+  //     console.error(`Failed to send student email:`, emailResult.studentEmail.error);
+  //   }
+  // } catch (error: any) {
+  //   console.error(`Failed to send confirmation emails for booking ${booking.id}:`, error);
+  // }
+}
+
+// Helper to mark booking as scheduling failed
+async function markBookingSchedulingFailed(bookingId: string, reason: string) {
+  try {
+    await db.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: 'SCHEDULING_FAILED',
+      },
+    });
+    console.log(`Marked booking ${bookingId} as SCHEDULING_FAILED: ${reason}`);
+  } catch (error) {
+    console.error(`Failed to mark booking ${bookingId} as failed:`, error);
   }
 }
 

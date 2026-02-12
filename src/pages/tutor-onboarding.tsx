@@ -30,7 +30,8 @@ import { US_TIMEZONES } from "~/utils/timezones";
 // StripeConnectSetup removed - payment setup now done via Earnings page on first withdrawal
 import OnboardingProgressBar from "~/components/OnboardingProgressBar";
 import dayjs from 'dayjs';
-import emailjs from "@emailjs/browser";
+// Edu verification emails commented out
+// import emailjs from "@emailjs/browser";
 import PortalMultiselect from "~/components/PortalMultiselect";
 
 const BIO_LENGTH = 250;
@@ -89,11 +90,11 @@ export default function Example() {
   const companiesQuery = api.post.getAllCompanies.useQuery(undefined, {
     staleTime: 1000 * 60 * 60,
   });
-  // .edu verification
-  const [eduEmailInput, setEduEmailInput] = useState<string>("");
-  const [verificationCodeInput, setVerificationCodeInput] = useState<string>("");
-  const [isSendingCode, setIsSendingCode] = useState<boolean>(false);
-  const [isVerifyingCode, setIsVerifyingCode] = useState<boolean>(false);
+  // .edu verification - commented out until re-enabled
+  // const [eduEmailInput, setEduEmailInput] = useState<string>("");
+  // const [verificationCodeInput, setVerificationCodeInput] = useState<string>("");
+  // const [isSendingCode, setIsSendingCode] = useState<boolean>(false);
+  // const [isVerifyingCode, setIsVerifyingCode] = useState<boolean>(false);
 
   const [editAvailability, setEditAvailability] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -263,7 +264,7 @@ export default function Example() {
     ) {
       setAvailability(tutor.data.availability);
     }
-    setEduEmailInput((tutor.data as any)?.eduEmail ?? "");
+    // setEduEmailInput((tutor.data as any)?.eduEmail ?? "");
     
     // Mark initial load as complete after data is loaded
     // (real "ready" signal handled by hydrationComplete below)
@@ -508,10 +509,10 @@ export default function Example() {
       await tutor.refetch();
     },
   });
-  // .edu verification mutations
-  const eduStart = api.post.eduStartVerification.useMutation();
-  const eduResend = api.post.eduResendVerification.useMutation();
-  const eduVerify = api.post.eduVerifyCode.useMutation();
+  // .edu verification mutations - commented out until re-enabled
+  // const eduStart = api.post.eduStartVerification.useMutation();
+  // const eduResend = api.post.eduResendVerification.useMutation();
+  // const eduVerify = api.post.eduVerifyCode.useMutation();
 
 
   // Separate mutation for auto-sync (no redirect)
@@ -1553,17 +1554,16 @@ export default function Example() {
                         try {
                           setIsSendingCode(true);
                           const res = await eduStart.mutateAsync({ tutorId: user.user?.id ?? "", eduEmail: eduEmailInput });
-                          try {
-                            await emailjs.send(
-                              "service_z8zzszl",
-                              (process.env.NEXT_PUBLIC_EMAILJS_VERIFY_TEMPLATE_ID as string) || "template_edu_verify",
-                              {
-                                verification_code: res.code,
-                                recipient_email: eduEmailInput,
-                              },
-                              { publicKey: "To4xMN8D9pz4wwmq8" },
-                            );
-                          } catch {}
+                          // Edu verification email commented out
+                          // try {
+                          //   await emailjs.send(
+                          //     "service_z8zzszl",
+                          //     (process.env.NEXT_PUBLIC_EMAILJS_VERIFY_TEMPLATE_ID as string) || "template_edu_verify",
+                          //     { verification_code: res.code, recipient_email: eduEmailInput },
+                          //     { publicKey: "To4xMN8D9pz4wwmq8" },
+                          //   );
+                          // } catch {}
+                          console.log('EDU verification code generated:', res.code);
                           toast.success(`Verification code sent to ${eduEmailInput}`);
                         } catch (err: any) {
                           toast.error(err?.message ?? "Failed to send code");
@@ -1582,17 +1582,16 @@ export default function Example() {
                         try {
                           setIsSendingCode(true);
                           const res = await eduResend.mutateAsync({ tutorId: user.user?.id ?? "" });
-                          try {
-                            await emailjs.send(
-                              "service_z8zzszl",
-                              (process.env.NEXT_PUBLIC_EMAILJS_VERIFY_TEMPLATE_ID as string) || "template_edu_verify",
-                              {
-                                verification_code: res.code,
-                                recipient_email: res.eduEmail,
-                              },
-                              { publicKey: "To4xMN8D9pz4wwmq8" },
-                            );
-                          } catch {}
+                          // Edu verification email commented out
+                          // try {
+                          //   await emailjs.send(
+                          //     "service_z8zzszl",
+                          //     (process.env.NEXT_PUBLIC_EMAILJS_VERIFY_TEMPLATE_ID as string) || "template_edu_verify",
+                          //     { verification_code: res.code, recipient_email: res.eduEmail },
+                          //     { publicKey: "To4xMN8D9pz4wwmq8" },
+                          //   );
+                          // } catch {}
+                          console.log('EDU verification code re-generated:', res.code);
                           toast.success(`Verification code re-sent to ${res.eduEmail}`);
                         } catch (err: any) {
                           toast.error(err?.message ?? "Failed to resend code");
