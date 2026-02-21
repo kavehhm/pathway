@@ -1,12 +1,11 @@
 /**
- * Email Sending Utility using Amazon SES
+ * Email Sending Utility using Brevo (formerly Sendinblue)
  * 
- * Provides a simple interface for sending transactional emails.
- * Handles both HTML and plain text content.
+ * Uses Brevo's transactional email API (not marketing campaigns).
+ * No extra npm package required -- uses the REST API directly via fetch.
  */
 
-import { SendEmailCommand, type SendEmailCommandInput } from '@aws-sdk/client-ses';
-import { getSESClient, emailConfig } from './sesClient';
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 export interface SendEmailParams {
   to: string | string[];
@@ -23,94 +22,76 @@ export interface SendEmailResult {
   error?: string;
 }
 
-/**
- * Strip HTML tags to create a plain text version
- */
 function htmlToPlainText(html: string): string {
   return html
-    // Replace <br> and </p> with newlines
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n\n')
-    // Remove all other HTML tags
     .replace(/<[^>]+>/g, '')
-    // Decode common HTML entities
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    // Trim extra whitespace
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
-/**
- * Send an email using Amazon SES
- * 
- * @param params Email parameters (to, subject, html, text?, replyTo?)
- * @returns Result object with success status and optional error
- */
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
   const { to, subject, html, text, replyTo, from } = params;
 
-  // Convert single recipient to array
-  const toAddresses = Array.isArray(to) ? to : [to];
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) {
+    console.error('Missing BREVO_API_KEY environment variable');
+    return { success: false, error: 'Missing BREVO_API_KEY' };
+  }
 
-  // Generate plain text from HTML if not provided
+  const toAddresses = Array.isArray(to) ? to : [to];
   const plainText = text ?? htmlToPlainText(html);
 
-  const emailParams: SendEmailCommandInput = {
-    Source: from ?? emailConfig.fromAddress,
-    Destination: {
-      ToAddresses: toAddresses,
-    },
-    Message: {
-      Subject: {
-        Data: subject,
-        Charset: 'UTF-8',
-      },
-      Body: {
-        Html: {
-          Data: html,
-          Charset: 'UTF-8',
-        },
-        Text: {
-          Data: plainText,
-          Charset: 'UTF-8',
-        },
-      },
-    },
-    ReplyToAddresses: [replyTo ?? emailConfig.replyToAddress],
+  const senderEmail = from ?? process.env.BREVO_SENDER_EMAIL ?? 'noreply@pathwaytutors.com';
+  const senderName = process.env.BREVO_SENDER_NAME ?? 'Pathway Tutors';
+
+  const body: Record<string, unknown> = {
+    sender: { name: senderName, email: senderEmail },
+    to: toAddresses.map((email) => ({ email })),
+    subject,
+    htmlContent: html,
+    textContent: plainText,
   };
 
+  if (replyTo) {
+    body.replyTo = { email: replyTo };
+  }
+
   try {
-    const client = getSESClient();
-    const command = new SendEmailCommand(emailParams);
-    const response = await client.send(command);
+    const response = await fetch(BREVO_API_URL, {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': apiKey,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
 
-    console.log(`Email sent successfully to ${toAddresses.join(', ')}. MessageId: ${response.MessageId}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMsg = (errorData as Record<string, unknown>)?.message as string | undefined ?? `HTTP ${response.status}`;
+      console.error(`Brevo API error for ${toAddresses.join(', ')}:`, errorMsg);
+      return { success: false, error: errorMsg };
+    }
 
-    return {
-      success: true,
-      messageId: response.MessageId,
-    };
+    const data = (await response.json()) as { messageId?: string };
+    console.log(`Email sent via Brevo to ${toAddresses.join(', ')}. MessageId: ${data.messageId}`);
+
+    return { success: true, messageId: data.messageId };
   } catch (error: any) {
     console.error(`Failed to send email to ${toAddresses.join(', ')}:`, error);
-
-    return {
-      success: false,
-      error: error.message || 'Unknown error occurred',
-    };
+    return { success: false, error: error.message ?? 'Unknown error occurred' };
   }
 }
 
-/**
- * Send multiple emails in parallel
- * 
- * @param emails Array of email parameters
- * @returns Array of results for each email
- */
 export async function sendEmails(emails: SendEmailParams[]): Promise<SendEmailResult[]> {
   return Promise.all(emails.map(sendEmail));
 }

@@ -8,12 +8,11 @@ import {
   parseBookingDateTime,
   type CalendarEventDetails,
 } from '~/lib/googleCalendar';
-// Amazon SES emails commented out - using EmailJS until SES production access is granted
-// import {
-//   sendBookingConfirmationEmails,
-//   sendSchedulingFailureNotification,
-//   calculateEndTime,
-// } from '~/lib/sendBookingEmails';
+import {
+  sendBookingConfirmationEmails,
+  sendSchedulingFailureNotification,
+  calculateEndTime,
+} from '~/lib/sendBookingEmails';
 import { isValidUrl } from '~/lib/validateUrl';
 
 // Initialize Stripe
@@ -256,13 +255,12 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       // Mark as scheduling failed but continue to try sending emails
       await markBookingSchedulingFailed(booking.id, error.message);
       
-      // Amazon SES commented out - using EmailJS until SES production access is granted
-      // await sendSchedulingFailureNotification(
-      //   booking.id,
-      //   tutorName,
-      //   studentName,
-      //   error.message
-      // );
+      await sendSchedulingFailureNotification(
+        booking.id,
+        tutorName,
+        studentName,
+        error.message
+      );
       
       // Still try to use the tutor's meeting link as fallback
       meetLink = tutorMeetingLink ?? '';
@@ -290,42 +288,41 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     console.error(`Failed to update booking ${booking.id} with meeting info:`, error);
   }
 
-  // Amazon SES confirmation emails commented out - using EmailJS on client side until SES production access is granted
-  // Emails are sent via EmailJS from ManualCal.tsx and PaymentForm.tsx on the client side
-  // try {
-  //   const endTime = calculateEndTime(booking.time);
-  //   const dateStr = booking.date.toLocaleDateString('en-US', {
-  //     weekday: 'long',
-  //     year: 'numeric',
-  //     month: 'long',
-  //     day: 'numeric',
-  //   });
-  //
-  //   const emailResult = await sendBookingConfirmationEmails({
-  //     tutorName,
-  //     studentName,
-  //     tutorEmail,
-  //     studentEmail,
-  //     date: dateStr,
-  //     startTime: booking.time,
-  //     endTime,
-  //     tutorTimezone,
-  //     studentTimezone: tutorTimezone,
-  //     meetingLink: meetLink || null,
-  //     calendarLink: calendarHtmlLink || null,
-  //   });
-  //
-  //   console.log(`Email results - Tutor: ${emailResult.tutorEmail.success}, Student: ${emailResult.studentEmail.success}`);
-  //   
-  //   if (!emailResult.tutorEmail.success) {
-  //     console.error(`Failed to send tutor email:`, emailResult.tutorEmail.error);
-  //   }
-  //   if (!emailResult.studentEmail.success) {
-  //     console.error(`Failed to send student email:`, emailResult.studentEmail.error);
-  //   }
-  // } catch (error: any) {
-  //   console.error(`Failed to send confirmation emails for booking ${booking.id}:`, error);
-  // }
+  // Send confirmation emails via Brevo (server-side, after calendar event is created)
+  try {
+    const endTime = calculateEndTime(booking.time);
+    const dateStr = booking.date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    const emailResult = await sendBookingConfirmationEmails({
+      tutorName,
+      studentName,
+      tutorEmail,
+      studentEmail,
+      date: dateStr,
+      startTime: booking.time,
+      endTime,
+      tutorTimezone,
+      studentTimezone: tutorTimezone,
+      meetingLink: meetLink ?? null,
+      calendarLink: calendarHtmlLink ?? null,
+    });
+
+    console.log(`Email results - Tutor: ${emailResult.tutorEmail.success}, Student: ${emailResult.studentEmail.success}`);
+    
+    if (!emailResult.tutorEmail.success) {
+      console.error(`Failed to send tutor email:`, emailResult.tutorEmail.error);
+    }
+    if (!emailResult.studentEmail.success) {
+      console.error(`Failed to send student email:`, emailResult.studentEmail.error);
+    }
+  } catch (error: any) {
+    console.error(`Failed to send confirmation emails for booking ${booking.id}:`, error);
+  }
 }
 
 // Helper to mark booking as scheduling failed

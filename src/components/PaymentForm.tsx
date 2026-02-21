@@ -8,7 +8,6 @@ import {
 } from '@stripe/react-stripe-js';
 import { api } from '~/utils/api';
 import { toast } from 'react-hot-toast';
-import emailjs from '@emailjs/browser';
 import { getCurrentTimezone, convertTimeBetweenTimezones } from '~/utils/timezones';
 import { useUser } from '@clerk/nextjs';
 
@@ -198,29 +197,9 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
         location: tutorInfo.meetingLink ?? 'N/A',
       };
 
-      console.log('Sending emails with params:');
-      console.log('Tutor email params:', tutorEmailParams);
-      console.log('Student email params:', studentEmailParams);
-
-      // Send email to tutor
-      try {
-        await emailjs.send("service_z8zzszl", "template_z7etjno", tutorEmailParams, {
-          publicKey: "To4xMN8D9pz4wwmq8",
-        });
-        console.log('Email sent to tutor successfully');
-      } catch (error) {
-        console.error('Error sending email to tutor:', error);
-      }
-
-      // Send email to student
-      try {
-        await emailjs.send("service_z8zzszl", "template_gvkyabt", studentEmailParams, {
-          publicKey: "To4xMN8D9pz4wwmq8",
-        });
-        console.log('Email sent to student successfully');
-      } catch (error) {
-        console.error('Error sending email to student:', error);
-      }
+      // Confirmation emails are sent server-side from the Stripe webhook
+      // (after Google Calendar event + Meet link are created)
+      console.log('Booking confirmed - confirmation emails will be sent from webhook');
     }
 
     toast.success('Session booked successfully!');

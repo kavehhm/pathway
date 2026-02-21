@@ -5,7 +5,6 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import PaymentForm from './PaymentForm';
 import { getCurrentTimezone, convertTimeBetweenTimezones } from '~/utils/timezones';
-import emailjs from '@emailjs/browser';
 import { useUser } from '@clerk/nextjs';
 
 interface ManualCalProps {
@@ -494,27 +493,37 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
               location: tutor.data.meetingLink ?? 'N/A',
             };
 
-            console.log('Sending emails for free session with params:');
-            console.log('Tutor email params:', tutorEmailParams);
-            console.log('Student email params:', studentEmailParams);
+            console.log('Sending booking confirmation emails for free session via API...');
 
-            // Send email to tutor
-            emailjs.send("service_z8zzszl", "template_z7etjno", tutorEmailParams, {
-              publicKey: "To4xMN8D9pz4wwmq8",
-            }).then(() => {
-              console.log('Email sent to tutor successfully');
-            }).catch((error) => {
-              console.error('Error sending email to tutor:', error);
-            });
-
-            // Send email to student
-            emailjs.send("service_z8zzszl", "template_gvkyabt", studentEmailParams, {
-              publicKey: "To4xMN8D9pz4wwmq8",
-            }).then(() => {
-              console.log('Email sent to student successfully');
-            }).catch((error) => {
-              console.error('Error sending email to student:', error);
-            });
+            fetch('/api/send-booking-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'both',
+                params: {
+                  tutorName: `${tutor.data.firstName} ${tutor.data.lastName}`,
+                  studentName,
+                  date: dateStr,
+                  startTime: selectedTime,
+                  endTime: studentEndTime,
+                  timeZone: studentTimezone,
+                  studentEmail,
+                  tutorEmail: tutor.data.email,
+                  meetingLink: tutor.data.meetingLink ?? 'N/A',
+                },
+              }),
+            })
+              .then((res) => res.json())
+              .then((result) => {
+                if (result.success) {
+                  console.log('Booking confirmation emails sent successfully');
+                } else {
+                  console.error('Failed to send some emails:', result);
+                }
+              })
+              .catch((error) => {
+                console.error('Error sending booking emails:', error);
+              });
           }
           
           handlePaymentSuccess(result.id);

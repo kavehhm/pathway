@@ -1,8 +1,8 @@
 /**
  * Server-side Email Sending for Booking Confirmations
  * 
- * Uses Amazon SES to send emails from the server.
- * This allows sending confirmation emails from webhooks.
+ * Uses Brevo transactional API to send emails from the server.
+ * This allows sending confirmation emails from webhooks (after calendar creation).
  */
 
 import { sendEmail } from './email';
@@ -110,7 +110,7 @@ export async function sendBookingConfirmationEmails(
     calendarLink: params.calendarLink ?? undefined,
   });
 
-  console.log('Sending booking confirmation emails via SES...');
+  console.log('Sending booking confirmation emails via Brevo...');
   console.log('Tutor:', params.tutorEmail);
   console.log('Student:', params.studentEmail);
 

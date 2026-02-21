@@ -1,7 +1,7 @@
 /**
  * Test Email Endpoint
  * 
- * A safe endpoint to test SES email sending.
+ * A safe endpoint to test Brevo email sending.
  * Only enabled in development OR when ADMIN_TEST_TOKEN is provided.
  * 
  * GET /api/test-email?to=test@example.com&token=your-admin-token
@@ -18,13 +18,11 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  // Only allow GET for simplicity
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  // Check if testing is enabled
   if (!isTestEnabled) {
     return res.status(403).json({
       error: 'Test endpoint disabled in production',
@@ -32,7 +30,6 @@ export default async function handler(
     });
   }
 
-  // In production, require the admin token
   if (process.env.NODE_ENV === 'production') {
     const providedToken = req.query.token as string;
     const expectedToken = process.env.ADMIN_TEST_TOKEN;
@@ -42,7 +39,6 @@ export default async function handler(
     }
   }
 
-  // Get recipient email from query
   const to = req.query.to as string;
   if (!to) {
     return res.status(400).json({
@@ -51,7 +47,6 @@ export default async function handler(
     });
   }
 
-  // Validate email format (basic check)
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(to)) {
     return res.status(400).json({ error: 'Invalid email format' });
@@ -60,7 +55,7 @@ export default async function handler(
   try {
     const result = await sendEmail({
       to,
-      subject: 'Pathway Tutors - SES Test Email',
+      subject: 'Pathway Tutors - Brevo Test Email',
       html: `
 <!DOCTYPE html>
 <html>
@@ -70,11 +65,11 @@ export default async function handler(
 </head>
 <body style="font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
   <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; padding: 30px; border-radius: 12px; text-align: center;">
-    <h1 style="margin: 0;">✅ SES Test Successful!</h1>
+    <h1 style="margin: 0;">Test Successful!</h1>
   </div>
   <div style="padding: 20px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
     <p>This is a test email from Pathway Tutors.</p>
-    <p>If you received this, Amazon SES is configured correctly!</p>
+    <p>If you received this, Brevo transactional email is configured correctly!</p>
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
     <p style="color: #6b7280; font-size: 14px;">
       Sent at: ${new Date().toISOString()}<br>
@@ -84,7 +79,7 @@ export default async function handler(
 </body>
 </html>
 `,
-      text: `SES Test Successful!\n\nThis is a test email from Pathway Tutors.\nIf you received this, Amazon SES is configured correctly!\n\nSent at: ${new Date().toISOString()}\nTo: ${to}`,
+      text: `Test Successful!\n\nThis is a test email from Pathway Tutors.\nIf you received this, Brevo transactional email is configured correctly!\n\nSent at: ${new Date().toISOString()}\nTo: ${to}`,
     });
 
     if (result.success) {
@@ -97,7 +92,7 @@ export default async function handler(
       return res.status(500).json({
         success: false,
         error: result.error,
-        hint: 'Check AWS credentials and SES configuration',
+        hint: 'Check BREVO_API_KEY and Brevo sender configuration',
       });
     }
   } catch (error: any) {
@@ -105,7 +100,7 @@ export default async function handler(
     return res.status(500).json({
       success: false,
       error: error.message,
-      hint: 'Check AWS credentials and SES configuration',
+      hint: 'Check BREVO_API_KEY and Brevo sender configuration',
     });
   }
 }
