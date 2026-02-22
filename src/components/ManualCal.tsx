@@ -220,32 +220,22 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
           return aMin - bMin;
         });
         
+        // Track how many slots were generated before past-time filtering
+        // so we can distinguish "no slots due to mobile bug" from "all slots passed"
+        const slotsGeneratedCount = allTimeSlots.length;
+
         // Filter out times that have already passed if viewing today
         const today = new Date();
         const isToday = selectedDate && 
           selectedDate.toDateString() === today.toDateString();
+        const currentHours = today.getHours();
+        const currentMinutes = today.getMinutes();
+        const nowMinutes = currentHours * 60 + currentMinutes;
         
         if (isToday) {
-          // Use manual formatting for current time to match time slot formatting
-          const currentHours = today.getHours();
-          const currentMinutes = today.getMinutes();
-          const currentPeriod = currentHours >= 12 ? 'PM' : 'AM';
-          const currentDisplayHours = currentHours === 0 ? 12 : currentHours > 12 ? currentHours - 12 : currentHours;
-          const currentTime = `${currentDisplayHours}:${currentMinutes.toString().padStart(2, '0')} ${currentPeriod}`;
-          
-          console.log('Current time (manual format):', currentTime);
-          console.log('Filtering out times before:', currentTime);
-          
           allTimeSlots = allTimeSlots.filter(slot => {
             const slotMinutes = parse12HourTimeToMinutes(slot.time);
-            const nowMinutes = currentHours * 60 + currentMinutes;
-            const isTimePassed = (slotMinutes ?? Infinity) <= nowMinutes;
-            
-            if (isTimePassed) {
-              console.log(`Filtering out ${slot.time} (already passed)`);
-            }
-            
-            return !isTimePassed;
+            return (slotMinutes ?? Infinity) > nowMinutes;
           });
         }
         
@@ -276,26 +266,14 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
           });
         }
         
-        console.log('Generated all time slots (after filtering):', allTimeSlots);
-                  console.log('Debug info:', {
-          userAgent: navigator.userAgent,
-          studentTimezone: normalizedStudentTz,
-          tutorTimezone: tutor.data?.timezone,
-          selectedDate: selectedDate.toISOString(),
-          selectedDay,
-          dayAvailabilities,
-          allTimeSlotsCount: allTimeSlots.length
-        });
+        console.log('Time slots after filtering:', allTimeSlots.length);
         
-        // Add fallback for mobile devices if no time slots are available
-        if (allTimeSlots.length === 0) {
+        // Fallback for mobile devices where timezone conversion produced zero slots.
+        // Only trigger when the main loop itself produced nothing (slotsGeneratedCount === 0),
+        // NOT when slots were generated then legitimately filtered out by the past-time check.
+        if (allTimeSlots.length === 0 && slotsGeneratedCount === 0) {
           console.warn('No time slots generated, this might be a mobile timezone issue');
-          console.log('Tutor availability:', tutor.data?.availability);
-          console.log('Student timezone:', normalizedStudentTz);
-          console.log('Tutor timezone:', tutor.data?.timezone);
 
-          
-          // Try to generate time slots without timezone conversion as fallback
           dayAvailabilities.forEach((dayAvailability) => {
             if (dayAvailability.timeRange) {
               const parts = String(dayAvailability.timeRange)
@@ -305,61 +283,48 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
               const endTime = parts[1] ?? '';
               const startMinutes = parse12HourTimeToMinutes(startTime);
               const endMinutes = parse12HourTimeToMinutes(endTime);
-              if (startMinutes == null || endMinutes == null) {
-                console.warn('Fallback: failed to parse time range:', { startTime, endTime });
-                return;
-              }
+              if (startMinutes == null || endMinutes == null) return;
               for (let cur = startMinutes; cur < endMinutes; cur += 60) {
                 const timeString = formatMinutesTo12Hour(cur);
-                
-                console.log('Fallback time slot (manual format):', timeString);
-                
-                allTimeSlots.push({
-                  time: timeString,
-                  available: true
-                });
+                if (!allTimeSlots.some(slot => slot.time === timeString)) {
+                  allTimeSlots.push({ time: timeString, available: true });
+                }
               }
             }
           });
-          
-          console.log('Fallback time slots (without conversion):', allTimeSlots);
-          
-          // If still no time slots, try using tutor's timezone directly
+
           if (allTimeSlots.length === 0 && tutor.data?.timezone) {
-            console.log('Trying fallback with tutor timezone directly');
             dayAvailabilities.forEach((dayAvailability) => {
               if (dayAvailability.timeRange) {
                 const parts = String(dayAvailability.timeRange)
                   .replace(/[–—]/g, '-')
                   .split(/\s*-\s*/);
-              const startTime = parts[0];
-              const endTime = parts[1];
-              const startMinutes = parse12HourTimeToMinutes(startTime ?? '');
-              const endMinutes = parse12HourTimeToMinutes(endTime ?? '');
-              if (startMinutes == null || endMinutes == null) {
-                console.warn('Second fallback: failed to parse time range:', { startTime, endTime });
-                return;
-              }
-              for (let cur = startMinutes; cur < endMinutes; cur += 60) {
-                const timeString = formatMinutesTo12Hour(cur);
-                  
-                  console.log('Second fallback time slot (manual format):', timeString);
-                  
-                  // Convert from tutor's timezone to a default timezone (PST) as last resort
+                const startTime = parts[0] ?? '';
+                const endTime = parts[1] ?? '';
+                const startMinutes = parse12HourTimeToMinutes(startTime);
+                const endMinutes = parse12HourTimeToMinutes(endTime);
+                if (startMinutes == null || endMinutes == null) return;
+                for (let cur = startMinutes; cur < endMinutes; cur += 60) {
+                  const timeString = formatMinutesTo12Hour(cur);
                   const fallbackTime = convertTimeBetweenTimezones(
                     timeString,
                     (tutor.data?.timezone ?? 'PST').toUpperCase(),
                     'PST'
                   );
-                  
-                  allTimeSlots.push({
-                    time: fallbackTime,
-                    available: true
-                  });
-              }
+                  if (!allTimeSlots.some(slot => slot.time === fallbackTime)) {
+                    allTimeSlots.push({ time: fallbackTime, available: true });
+                  }
+                }
               }
             });
-            console.log('Fallback time slots (tutor timezone to PST):', allTimeSlots);
+          }
+
+          // Apply past-time filtering to fallback-generated slots too
+          if (isToday && allTimeSlots.length > 0) {
+            allTimeSlots = allTimeSlots.filter(slot => {
+              const slotMinutes = parse12HourTimeToMinutes(slot.time);
+              return (slotMinutes ?? Infinity) > nowMinutes;
+            });
           }
         }
         
@@ -553,11 +518,40 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
     }
     
     const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-    const dayAvailability = tutor.data.availability.find(
+    const matchingAvailabilities = tutor.data.availability.filter(
       avail => avail.day === dayName && avail.available
     );
     
-    return !!dayAvailability;
+    if (matchingAvailabilities.length === 0) return false;
+
+    // If this date is today, check whether at least one slot is still in the future
+    const now = new Date();
+    if (date.toDateString() === now.toDateString()) {
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const normalizedStudentTz = (studentTimezone || 'PST').toUpperCase();
+
+      const hasFutureSlot = matchingAvailabilities.some(avail => {
+        if (!avail.timeRange) return false;
+        const parts = String(avail.timeRange).replace(/[–—]/g, '-').split(/\s*-\s*/);
+        const endTime = parts[1] ?? '';
+        const endMinutes = parse12HourTimeToMinutes(endTime);
+        if (endMinutes == null) return false;
+
+        // Convert the latest available time to the student's timezone
+        const endTimeStr = formatMinutesTo12Hour(endMinutes - 60);
+        const converted = convertTimeBetweenTimezones(
+          endTimeStr,
+          (tutor.data?.timezone ?? 'PST').toUpperCase(),
+          normalizedStudentTz
+        );
+        const convertedMinutes = parse12HourTimeToMinutes(converted);
+        return (convertedMinutes ?? 0) > nowMin;
+      });
+
+      return hasFutureSlot;
+    }
+
+    return true;
   };
 
   if (tutor.isLoading) {
@@ -673,9 +667,9 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
                 : 'Choose a time'
             }
           </option>
-          {availableTimes.map((slot) => (
+          {availableTimes.map((slot, i) => (
             <option 
-              key={slot.time} 
+              key={`${slot.time}-${i}`} 
               value={slot.time}
               disabled={!slot.available}
             >
