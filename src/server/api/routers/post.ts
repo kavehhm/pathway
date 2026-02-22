@@ -782,6 +782,8 @@ export const postRouter = createTRPCRouter({
       z.object({
         tutorId: z.string(), // clerkId of the tutor
         studentClerkId: z.string().optional(), // clerkId of the student
+        studentEmail: z.string().optional(),
+        studentName: z.string().optional(),
         date: z.string(),
         time: z.string(),
         status: z.string().optional().default("confirmed"),
@@ -806,11 +808,41 @@ export const postRouter = createTRPCRouter({
       ])
     )
     .mutation(async ({ input, ctx }) => {
-      const { tutorId, studentClerkId, date, time, status, free } = input;
+      const { tutorId, studentClerkId, studentEmail, studentName, date, time, status, free } = input;
 
       // Convert date string to DateTime (normalized to midnight UTC to match unique composite)
       const bookingDate = new Date(date);
       const normalizedDate = new Date(bookingDate.toISOString().split('T')[0] ?? date);
+
+      // Guard: prevent abuse of free first sessions
+      if (free) {
+        const freeSessionWhere: Record<string, unknown>[] = [];
+
+        // Check by student Clerk ID (logged-in users)
+        if (studentClerkId) {
+          freeSessionWhere.push({ studentClerkId });
+        }
+
+        // Check by student email (guest or logged-in)
+        if (studentEmail) {
+          freeSessionWhere.push({ studentEmail: studentEmail.toLowerCase().trim() });
+        }
+
+        if (freeSessionWhere.length > 0) {
+          const existingFree = await ctx.db.booking.findFirst({
+            where: {
+              tutorId,
+              free: true,
+              OR: freeSessionWhere,
+            },
+            select: { id: true },
+          });
+
+          if (existingFree) {
+            throw new Error('You have already used your free first session with this tutor.');
+          }
+        }
+      }
 
       // Guard: prevent duplicate booking at same tutor/date/time
       const existing = await ctx.db.booking.findFirst({
@@ -835,6 +867,8 @@ export const postRouter = createTRPCRouter({
           data: {
             tutorId,
             studentClerkId,
+            studentEmail: studentEmail?.toLowerCase().trim(),
+            studentName,
             date: normalizedDate,
             time,
             status,

@@ -14,7 +14,13 @@ export default authMiddleware({
     "/api/trpc/post.getAllApprovedTutors,post.getAllSchools,post.getAllMajors,post.getAllSubjects",
   ],
   // ignoredRoutes completely bypass Clerk middleware - use for health checks, webhooks, etc.
-  ignoredRoutes: ["/api/health"],
+  ignoredRoutes: [
+    "/api/health",
+    "/api/stripe-webhooks",
+    "/api/send-booking-email",
+    "/api/test-email",
+    "/api/test-calendar",
+  ],
 });
  
 export const config = {

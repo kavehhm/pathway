@@ -425,6 +425,8 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
       createBooking.mutate({
         tutorId: tutor.data.clerkId,
         studentClerkId: user?.id,
+        studentEmail: studentEmail.trim(),
+        studentName: studentName.trim(),
         date: selectedDate.toISOString().split('T')[0] ?? '',
         time: timeInTutorTimezone,
         status: "confirmed",
