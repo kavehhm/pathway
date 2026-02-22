@@ -1111,27 +1111,64 @@ export const postRouter = createTRPCRouter({
           select: { email: true }
         });
 
-        // Create a booking record with payment information for wallet processing
-        const booking = await ctx.db.booking.create({
-          data: {
-            tutorId,
-            studentClerkId,
-            date: normalizedDate,
-            time,
-            status: 'confirmed',
-            stripePaymentIntentId: paymentIntentId,
-            totalAmountCents: totalAmount,
-            platformFeeCents: platformFee,
-            mentorEarningsCents: tutorAmount,
-            earningsProcessed: false, // Will be set true when session is completed and earnings added
-            // Store student and tutor info for calendar/email integration
-            studentEmail,
-            studentName,
-            tutorEmail: tutorData?.email,
+        // Create booking, credit tutor wallet, and mark as completed in one transaction.
+        // This must happen here (not in the Stripe webhook) because the webhook fires
+        // before this mutation creates the booking, so it finds nothing and exits early.
+        const result = await ctx.db.$transaction(async (tx) => {
+          const booking = await tx.booking.create({
+            data: {
+              tutorId,
+              studentClerkId,
+              date: normalizedDate,
+              time,
+              status: 'completed',
+              stripePaymentIntentId: paymentIntentId,
+              totalAmountCents: totalAmount,
+              platformFeeCents: platformFee,
+              mentorEarningsCents: tutorAmount,
+              earningsProcessed: true,
+              studentEmail,
+              studentName,
+              tutorEmail: tutorData?.email,
+            }
+          });
+
+          // Credit tutor's wallet
+          if (tutorAmount > 0) {
+            let wallet = await tx.mentorWallet.findUnique({
+              where: { mentorId: tutorId },
+            });
+
+            if (!wallet) {
+              wallet = await tx.mentorWallet.create({
+                data: { mentorId: tutorId, availableCents: 0, pendingCents: 0 },
+              });
+            }
+
+            const newBalance = wallet.availableCents + tutorAmount;
+
+            await tx.mentorWallet.update({
+              where: { mentorId: tutorId },
+              data: { availableCents: newBalance },
+            });
+
+            await tx.mentorLedgerEntry.create({
+              data: {
+                mentorId: tutorId,
+                type: 'SESSION_EARNED',
+                amountCents: tutorAmount,
+                balanceAfterCents: newBalance,
+                relatedSessionId: booking.id,
+                stripePaymentIntentId: paymentIntentId,
+                description: `Earnings from session on ${normalizedDate.toLocaleDateString()}`,
+              },
+            });
           }
+
+          return booking;
         });
 
-        console.log('Booking created with payment info:', booking);
+        console.log('Booking created with payment info and wallet credited:', result.id);
 
         // Get tutor information for email
         const tutor = await ctx.db.user.findUnique({
@@ -1142,7 +1179,7 @@ export const postRouter = createTRPCRouter({
         return { 
           success: true, 
           message: 'Session booked successfully', 
-          bookingId: booking.id,
+          bookingId: result.id,
           tutorInfo: tutor ? {
             tutorName: `${tutor.firstName} ${tutor.lastName}`,
             tutorEmail: tutor.email,

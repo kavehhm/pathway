@@ -162,8 +162,10 @@ async function handleAccountUpdated(account: Stripe.Account) {
 async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
   console.log(`PaymentIntent succeeded: ${paymentIntent.id}`);
 
-  // Find the booking associated with this payment
-  const booking = await db.booking.findFirst({
+  // Find the booking associated with this payment.
+  // The booking is created by the bookSession mutation which may run after this webhook,
+  // so we retry a few times with a short delay to handle the race condition.
+  let booking = await db.booking.findFirst({
     where: { stripePaymentIntentId: paymentIntent.id },
     include: {
       tutor: {
@@ -180,9 +182,29 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   });
 
   if (!booking) {
-    console.log(`No booking found for PaymentIntent: ${paymentIntent.id}`);
-    // This might happen if the booking hasn't been created yet
-    // The booking is created via the bookSession mutation which runs after payment confirmation
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      booking = await db.booking.findFirst({
+        where: { stripePaymentIntentId: paymentIntent.id },
+        include: {
+          tutor: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+              meetingLink: true,
+              timezone: true,
+              clerkId: true,
+            },
+          },
+        },
+      });
+      if (booking) break;
+    }
+  }
+
+  if (!booking) {
+    console.error(`No booking found for PaymentIntent ${paymentIntent.id} after retries`);
     return;
   }
 
@@ -324,10 +346,14 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     console.error(`Failed to send confirmation emails for booking ${booking.id}:`, error);
   }
 
-  // Credit the tutor's wallet with their earnings
-  if (!booking.earningsProcessed && !booking.free && booking.mentorEarningsCents) {
+  // Credit the tutor's wallet if bookSession hasn't already done so
+  const earningsCents = booking.mentorEarningsCents;
+  const bookingId = booking.id;
+  const bookingDate = booking.date;
+  const mentorId = booking.tutor.clerkId;
+
+  if (!booking.earningsProcessed && !booking.free && earningsCents) {
     try {
-      const mentorId = booking.tutor.clerkId;
       await db.$transaction(async (tx) => {
         let wallet = await tx.mentorWallet.findUnique({
           where: { mentorId },
@@ -339,7 +365,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
           });
         }
 
-        const newBalance = wallet.availableCents + booking.mentorEarningsCents!;
+        const newBalance = wallet.availableCents + earningsCents;
 
         await tx.mentorWallet.update({
           where: { mentorId },
@@ -350,23 +376,23 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
           data: {
             mentorId,
             type: 'SESSION_EARNED',
-            amountCents: booking.mentorEarningsCents!,
+            amountCents: earningsCents,
             balanceAfterCents: newBalance,
-            relatedSessionId: booking.id,
+            relatedSessionId: bookingId,
             stripePaymentIntentId: paymentIntent.id,
-            description: `Earnings from session on ${booking.date.toLocaleDateString()}`,
+            description: `Earnings from session on ${bookingDate.toLocaleDateString()}`,
           },
         });
 
         await tx.booking.update({
-          where: { id: booking.id },
+          where: { id: bookingId },
           data: { earningsProcessed: true, status: 'completed' },
         });
       });
 
-      console.log(`Credited ${booking.mentorEarningsCents} cents to tutor ${mentorId}'s wallet`);
+      console.log(`Credited ${earningsCents} cents to tutor ${mentorId}'s wallet`);
     } catch (error: any) {
-      console.error(`Failed to credit wallet for booking ${booking.id}:`, error);
+      console.error(`Failed to credit wallet for booking ${bookingId}:`, error);
     }
   }
 }
