@@ -360,7 +360,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
 
         await tx.booking.update({
           where: { id: booking.id },
-          data: { earningsProcessed: true },
+          data: { earningsProcessed: true, status: 'completed' },
         });
       });
 
