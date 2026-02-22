@@ -323,6 +323,52 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   } catch (error: any) {
     console.error(`Failed to send confirmation emails for booking ${booking.id}:`, error);
   }
+
+  // Credit the tutor's wallet with their earnings
+  if (!booking.earningsProcessed && !booking.free && booking.mentorEarningsCents) {
+    try {
+      const mentorId = booking.tutor.clerkId;
+      await db.$transaction(async (tx) => {
+        let wallet = await tx.mentorWallet.findUnique({
+          where: { mentorId },
+        });
+
+        if (!wallet) {
+          wallet = await tx.mentorWallet.create({
+            data: { mentorId, availableCents: 0, pendingCents: 0 },
+          });
+        }
+
+        const newBalance = wallet.availableCents + booking.mentorEarningsCents!;
+
+        await tx.mentorWallet.update({
+          where: { mentorId },
+          data: { availableCents: newBalance },
+        });
+
+        await tx.mentorLedgerEntry.create({
+          data: {
+            mentorId,
+            type: 'SESSION_EARNED',
+            amountCents: booking.mentorEarningsCents!,
+            balanceAfterCents: newBalance,
+            relatedSessionId: booking.id,
+            stripePaymentIntentId: paymentIntent.id,
+            description: `Earnings from session on ${booking.date.toLocaleDateString()}`,
+          },
+        });
+
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: { earningsProcessed: true },
+        });
+      });
+
+      console.log(`Credited ${booking.mentorEarningsCents} cents to tutor ${mentorId}'s wallet`);
+    } catch (error: any) {
+      console.error(`Failed to credit wallet for booking ${booking.id}:`, error);
+    }
+  }
 }
 
 // Helper to mark booking as scheduling failed
