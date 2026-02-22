@@ -1,5 +1,4 @@
 import Head from "next/head";
-import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/router";
@@ -370,21 +369,24 @@ export default function Home() {
               </h2>
               <div className="relative mt-8 overflow-hidden">
                 {/* Fade edges */}
-                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-gradient-to-r from-[#f5f3ff] to-transparent" />
-                <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-gradient-to-l from-[#f5f3ff] to-transparent" />
-                {/* Marquee track */}
-                <div className="flex w-max animate-marquee">
+                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-[#f5f3ff] to-transparent sm:w-24" />
+                <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-[#f5f3ff] to-transparent sm:w-24" />
+                {/* Marquee track — two identical flex children so translateX(-50%) loops perfectly */}
+                <div className="flex w-max animate-marquee will-change-transform">
                   {[...FEATURED_SCHOOLS, ...FEATURED_SCHOOLS].map((school, i) => (
                     <div
                       key={`${school.name}-${i}`}
-                      className="mx-6 flex flex-shrink-0 items-center justify-center rounded-2xl bg-white/70 px-8 py-4 shadow-sm backdrop-blur-sm"
+                      className="mx-4 flex h-16 w-28 flex-shrink-0 items-center justify-center rounded-2xl bg-white/70 shadow-sm backdrop-blur-sm sm:mx-6 sm:h-20 sm:w-40 sm:px-8 sm:py-4"
                     >
-                      <Image
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
                         src={school.logo}
                         alt={school.name}
                         width={120}
                         height={40}
-                        className="h-12 w-auto object-contain"
+                        loading="eager"
+                        decoding="async"
+                        className="h-8 w-auto object-contain sm:h-12"
                       />
                     </div>
                   ))}

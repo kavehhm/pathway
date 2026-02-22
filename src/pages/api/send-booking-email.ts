@@ -3,6 +3,7 @@
  * 
  * Uses Brevo transactional email API (via ~/lib/email).
  * Called from ManualCal.tsx for free session booking confirmations.
+ * Also creates a Google Calendar event with a Meet link for free sessions.
  * Paid session emails are sent from the Stripe webhook after calendar creation.
  * 
  * POST /api/send-booking-email
@@ -15,9 +16,19 @@ import {
   studentBookingConfirmationEmail,
   type BookingConfirmationParams,
 } from '~/lib/email/templates';
+import {
+  createMeetEvent,
+  formatBookingForCalendar,
+  parseBookingDateTime,
+  type CalendarEventDetails,
+} from '~/lib/googleCalendar';
+import { isValidUrl } from '~/lib/validateUrl';
+import { db } from '~/server/db';
 
 interface SendBookingEmailRequest {
   type: 'tutor' | 'student' | 'both';
+  bookingId?: string;
+  tutorTimezone?: string;
   params: {
     tutorName: string;
     studentName: string;
@@ -36,6 +47,7 @@ interface SendBookingEmailResponse {
   success: boolean;
   tutorEmail?: { success: boolean; error?: string };
   studentEmail?: { success: boolean; error?: string };
+  meetLink?: string;
   error?: string;
 }
 
@@ -49,7 +61,7 @@ export default async function handler(
   }
 
   try {
-    const { type, params } = req.body as SendBookingEmailRequest;
+    const { type, params, bookingId, tutorTimezone } = req.body as SendBookingEmailRequest;
 
     if (!type || !params) {
       return res.status(400).json({ success: false, error: 'Missing type or params' });
@@ -64,12 +76,63 @@ export default async function handler(
       'timeZone',
       'studentEmail',
       'tutorEmail',
-      'meetingLink',
     ];
 
     for (const field of requiredFields) {
       if (!params[field as keyof typeof params]) {
         return res.status(400).json({ success: false, error: `Missing required field: ${field}` });
+      }
+    }
+
+    let meetingLink = params.meetingLink;
+    let calendarLink = params.calendarLink;
+
+    // If there's no valid meeting link, create a Google Calendar event with Meet
+    if (!isValidUrl(meetingLink)) {
+      try {
+        const timezone = tutorTimezone ?? 'America/Los_Angeles';
+        const { startTime, endTime } = parseBookingDateTime(params.date, params.startTime, timezone);
+        const { summary, description } = formatBookingForCalendar(params.tutorName, params.studentName);
+
+        const eventDetails: CalendarEventDetails = {
+          summary,
+          description,
+          startTime,
+          endTime,
+          timezone,
+          tutorEmail: params.tutorEmail,
+          studentEmail: params.studentEmail,
+          tutorName: params.tutorName,
+          studentName: params.studentName,
+        };
+
+        console.log(`Creating Google Calendar event for free session booking...`);
+        const calendarResult = await createMeetEvent(eventDetails);
+
+        meetingLink = calendarResult.meetLink;
+        calendarLink = calendarResult.htmlLink;
+        console.log(`Created calendar event ${calendarResult.eventId} with Meet link: ${meetingLink}`);
+
+        // Update the booking record with calendar info
+        if (bookingId) {
+          try {
+            await db.booking.update({
+              where: { id: bookingId },
+              data: {
+                meetLink: meetingLink || null,
+                calendarEventId: calendarResult.eventId || null,
+                calendarHtmlLink: calendarLink || null,
+                tutorEmail: params.tutorEmail,
+              },
+            });
+            console.log(`Updated booking ${bookingId} with calendar info`);
+          } catch (dbError: any) {
+            console.error(`Failed to update booking ${bookingId}:`, dbError.message);
+          }
+        }
+      } catch (calError: any) {
+        console.error('Failed to create Google Calendar event:', calError.message);
+        meetingLink = 'Unable to generate - please contact your tutor';
       }
     }
 
@@ -82,8 +145,8 @@ export default async function handler(
       timeZone: params.timeZone,
       studentEmail: params.studentEmail,
       tutorEmail: params.tutorEmail,
-      meetingLink: params.meetingLink,
-      calendarLink: params.calendarLink,
+      meetingLink,
+      calendarLink,
     };
 
     const results: SendBookingEmailResponse = { success: true };
@@ -117,6 +180,10 @@ export default async function handler(
 
     if (tutorFailed ?? studentFailed) {
       results.success = false;
+    }
+
+    if (meetingLink) {
+      results.meetLink = meetingLink;
     }
 
     return res.status(200).json(results);

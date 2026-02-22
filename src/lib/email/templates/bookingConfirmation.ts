@@ -73,15 +73,6 @@ const emailStyles = `
     font-weight: 600;
     margin: 20px 0;
   }
-  .calendar-link {
-    display: inline-block;
-    background: #f3f4f6;
-    color: #374151 !important;
-    padding: 10px 20px;
-    border-radius: 6px;
-    text-decoration: none;
-    font-size: 14px;
-  }
   .footer {
     text-align: center;
     padding: 20px;
@@ -153,8 +144,8 @@ export function tutorBookingConfirmationEmail(params: BookingConfirmationParams)
     ` : ''}
 
     ${params.calendarLink ? `
-    <div style="text-align: center;">
-      <a href="${params.calendarLink}" class="calendar-link">View in Calendar</a>
+    <div style="text-align: center; margin-top: 12px;">
+      <p style="color: #6b7280; font-size: 14px;">📅 A Google Calendar invitation has been sent to your email.</p>
     </div>
     ` : ''}
 
@@ -182,7 +173,7 @@ Date: ${params.date}
 Time: ${params.startTime} - ${params.endTime} (${params.timeZone})
 Student Email: ${params.studentEmail}
 Meeting Link: ${params.meetingLink}
-${params.calendarLink ? `Calendar Link: ${params.calendarLink}` : ''}
+${params.calendarLink ? `A Google Calendar invitation has been sent to your email.` : ''}
 
 Please be ready a few minutes before the scheduled time. If you need to reschedule or cancel, please contact the student directly.
 
@@ -253,8 +244,8 @@ export function studentBookingConfirmationEmail(params: BookingConfirmationParam
     ` : ''}
 
     ${params.calendarLink ? `
-    <div style="text-align: center;">
-      <a href="${params.calendarLink}" class="calendar-link">Add to Calendar</a>
+    <div style="text-align: center; margin-top: 12px;">
+      <p style="color: #6b7280; font-size: 14px;">📅 A Google Calendar invitation has been sent to your email.</p>
     </div>
     ` : ''}
 
@@ -284,7 +275,7 @@ Date: ${params.date}
 Time: ${params.startTime} - ${params.endTime} (${params.timeZone})
 Tutor Email: ${params.tutorEmail}
 Meeting Link: ${params.meetingLink}
-${params.calendarLink ? `Calendar Link: ${params.calendarLink}` : ''}
+${params.calendarLink ? `A Google Calendar invitation has been sent to your email.` : ''}
 
 Please join the meeting a few minutes early. If you have any questions before the session, feel free to email your tutor.
 

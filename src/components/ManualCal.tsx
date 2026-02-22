@@ -469,32 +469,6 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
 
             const dateStr = selectedDate.toISOString().split('T')[0];
 
-            // Email params for tutor (in tutor's timezone)
-            const tutorEmailParams = {
-              tutor_name: `${tutor.data.firstName} ${tutor.data.lastName}`,
-              student_name: studentName,
-              date: dateStr,
-              start_time: tutorStartTime,
-              end_time: tutorEndTime,
-              timeZone: tutor.data.timezone ?? 'PST',
-              student_email: studentEmail,
-              tutor_email: tutor.data.email,
-              location: tutor.data.meetingLink ?? 'N/A',
-            };
-
-            // Email params for student (in student's timezone)
-            const studentEmailParams = {
-              tutor_name: `${tutor.data.firstName} ${tutor.data.lastName}`,
-              student_name: studentName,
-              date: dateStr,
-              start_time: selectedTime,
-              end_time: studentEndTime,
-              timeZone: studentTimezone,
-              student_email: studentEmail,
-              tutor_email: tutor.data.email,
-              location: tutor.data.meetingLink ?? 'N/A',
-            };
-
             console.log('Sending booking confirmation emails for free session via API...');
 
             fetch('/api/send-booking-email', {
@@ -502,6 +476,8 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 type: 'both',
+                bookingId: result.id,
+                tutorTimezone: tutor.data.timezone ?? 'America/Los_Angeles',
                 params: {
                   tutorName: `${tutor.data.firstName} ${tutor.data.lastName}`,
                   studentName,
@@ -511,7 +487,7 @@ const ManualCal: React.FC<ManualCalProps> = ({ userId }) => {
                   timeZone: studentTimezone,
                   studentEmail,
                   tutorEmail: tutor.data.email,
-                  meetingLink: tutor.data.meetingLink ?? 'N/A',
+                  meetingLink: tutor.data.meetingLink ?? '',
                 },
               }),
             })
