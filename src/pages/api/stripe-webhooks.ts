@@ -335,6 +335,9 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
 
   if (!booking.earningsProcessed && !booking.free && earningsCents) {
     try {
+      const HOLD_DAYS = 7;
+      const availableAt = new Date(Date.now() + HOLD_DAYS * 24 * 60 * 60 * 1000);
+
       await db.$transaction(async (tx) => {
         let wallet = await tx.mentorWallet.findUnique({
           where: { mentorId },
@@ -346,11 +349,11 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
           });
         }
 
-        const newBalance = wallet.availableCents + earningsCents;
+        const newPending = wallet.pendingCents + earningsCents;
 
         await tx.mentorWallet.update({
           where: { mentorId },
-          data: { availableCents: newBalance },
+          data: { pendingCents: newPending },
         });
 
         await tx.mentorLedgerEntry.create({
@@ -358,20 +361,20 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
             mentorId,
             type: 'SESSION_EARNED',
             amountCents: earningsCents,
-            balanceAfterCents: newBalance,
+            balanceAfterCents: newPending,
             relatedSessionId: bookingId,
             stripePaymentIntentId: paymentIntent.id,
-            description: `Earnings from session on ${bookingDate.toLocaleDateString()}`,
+            description: `Earnings from session on ${bookingDate.toLocaleDateString()} (available ${availableAt.toLocaleDateString()})`,
           },
         });
 
         await tx.booking.update({
           where: { id: bookingId },
-          data: { earningsProcessed: true, status: 'completed' },
+          data: { earningsProcessed: true, status: 'completed', availableAt, fundsReleased: false },
         });
       });
 
-      console.log(`Credited ${earningsCents} cents to tutor ${mentorId}'s wallet`);
+      console.log(`Credited ${earningsCents} cents to tutor ${mentorId}'s pending wallet`);
     } catch (error: any) {
       diag.errors.push(`Wallet credit failed: ${error.message}`);
       console.error(`Failed to credit wallet for booking ${bookingId}:`, error);

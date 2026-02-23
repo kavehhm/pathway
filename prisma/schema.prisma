@@ -161,6 +161,8 @@ model Booking {
   platformFeeCents      Int?     // Platform fee amount (in cents)
   mentorEarningsCents   Int?     // Amount mentor earns (total - platform fee)
   earningsProcessed     Boolean  @default(false) // Whether earnings have been added to wallet
+  availableAt           DateTime? // When this booking's earnings become withdrawable
+  fundsReleased         Boolean  @default(false) // Whether earnings moved from pending to available
   // Student info for calendar and emails
   studentEmail          String?  // Student's email for calendar invites
   studentName           String?  // Student's name

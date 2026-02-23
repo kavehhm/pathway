@@ -160,6 +160,7 @@ const EarningsDashboard: React.FC<EarningsDashboardProps> = ({ onWithdrawComplet
   const wallet = walletData?.wallet;
   const pendingPayouts = walletData?.pendingPayouts ?? [];
   const ledgerEntries = walletData?.ledgerEntries ?? [];
+  const pendingEarnings = walletData?.pendingEarnings ?? [];
 
   return (
     <div className="space-y-8">
@@ -198,7 +199,7 @@ const EarningsDashboard: React.FC<EarningsDashboardProps> = ({ onWithdrawComplet
               </svg>
             </div>
           </div>
-          <p className="mt-4 text-yellow-100 text-sm">Awaiting verification or processing</p>
+          <p className="mt-4 text-yellow-100 text-sm">Clearing — available after 7-day hold</p>
         </div>
 
         {/* Stripe Status */}
@@ -293,10 +294,64 @@ const EarningsDashboard: React.FC<EarningsDashboardProps> = ({ onWithdrawComplet
               </svg>
             </div>
             <p className="text-gray-600">No funds available to withdraw</p>
-            <p className="text-sm text-gray-500 mt-1">Complete sessions to earn money</p>
+            <p className="text-sm text-gray-500 mt-1">
+              {(wallet?.pendingCents ?? 0) > 0
+                ? 'Your earnings are still clearing. Check the timeline below.'
+                : 'Complete sessions to earn money'}
+            </p>
           </div>
         )}
       </div>
+
+      {/* Pending Earnings Timeline */}
+      {pendingEarnings.length > 0 && (
+        <div className="rounded-2xl bg-white shadow-lg border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-1">Pending Earnings</h3>
+          <p className="text-sm text-gray-500 mb-4">
+            Earnings are held for 7 days while payment settles. They will automatically become available for withdrawal.
+          </p>
+          <div className="space-y-3">
+            {pendingEarnings.map((earning) => {
+              const availDate = earning.availableAt ? new Date(earning.availableAt) : null;
+              const now = new Date();
+              const daysLeft = availDate
+                ? Math.max(0, Math.ceil((availDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+                : null;
+
+              return (
+                <div key={earning.id} className="flex items-center justify-between p-4 bg-yellow-50 rounded-xl border border-yellow-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        {earning.studentName ? `Session with ${earning.studentName}` : 'Tutoring session'}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {earning.date ? new Date(earning.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                        {earning.time ? ` at ${earning.time}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-yellow-700">
+                      {formatCurrency(earning.mentorEarningsCents ?? 0)}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {daysLeft !== null && daysLeft > 0
+                        ? `Available in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`
+                        : 'Available soon'}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Pending Payouts */}
       {pendingPayouts.length > 0 && (
@@ -413,10 +468,11 @@ const EarningsDashboard: React.FC<EarningsDashboardProps> = ({ onWithdrawComplet
             <h4 className="font-medium text-blue-900">How payouts work</h4>
             <ul className="mt-2 text-sm text-blue-800 space-y-1">
               <li>1. Complete tutoring sessions with students</li>
-              <li>2. Sessions are marked complete and earnings are added to your balance</li>
-              <li>3. Click &quot;Withdraw&quot; to transfer funds to your bank account</li>
-              <li>4. First withdrawal requires Stripe verification (SSN, bank info)</li>
-              <li>5. Funds typically arrive in 2-3 business days</li>
+              <li>2. Earnings enter a 7-day hold while the payment settles</li>
+              <li>3. After the hold, funds move to your available balance automatically</li>
+              <li>4. Click &quot;Withdraw&quot; to transfer available funds to your bank account</li>
+              <li>5. First withdrawal requires Stripe verification (SSN, bank info)</li>
+              <li>6. Funds typically arrive in 2-3 business days after withdrawal</li>
             </ul>
             <p className="mt-3 text-sm text-blue-700">
               <strong>Platform fee:</strong> 10% | <strong>You receive:</strong> 90% of each session

@@ -6,6 +6,7 @@ import path from "path";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { getSchoolPrestigeRank } from "~/schoolPrestige";
 import { isValidUrl } from "~/lib/validateUrl";
+import { releasePendingEarnings } from "~/lib/releasePendingEarnings";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
@@ -1126,6 +1127,9 @@ export const postRouter = createTRPCRouter({
         // Create booking, credit tutor wallet, and mark as completed in one transaction.
         // This must happen here (not in the Stripe webhook) because the webhook fires
         // before this mutation creates the booking, so it finds nothing and exits early.
+        const HOLD_DAYS = 7;
+        const availableAt = new Date(Date.now() + HOLD_DAYS * 24 * 60 * 60 * 1000);
+
         const result = await ctx.db.$transaction(async (tx) => {
           const booking = await tx.booking.create({
             data: {
@@ -1139,13 +1143,14 @@ export const postRouter = createTRPCRouter({
               platformFeeCents: platformFee,
               mentorEarningsCents: tutorAmount,
               earningsProcessed: true,
+              availableAt,
+              fundsReleased: false,
               studentEmail,
               studentName,
               tutorEmail: tutorData?.email,
             }
           });
 
-          // Credit tutor's wallet
           if (tutorAmount > 0) {
             let wallet = await tx.mentorWallet.findUnique({
               where: { mentorId: tutorId },
@@ -1157,11 +1162,11 @@ export const postRouter = createTRPCRouter({
               });
             }
 
-            const newBalance = wallet.availableCents + tutorAmount;
+            const newPending = wallet.pendingCents + tutorAmount;
 
             await tx.mentorWallet.update({
               where: { mentorId: tutorId },
-              data: { availableCents: newBalance },
+              data: { pendingCents: newPending },
             });
 
             await tx.mentorLedgerEntry.create({
@@ -1169,10 +1174,10 @@ export const postRouter = createTRPCRouter({
                 mentorId: tutorId,
                 type: 'SESSION_EARNED',
                 amountCents: tutorAmount,
-                balanceAfterCents: newBalance,
+                balanceAfterCents: newPending,
                 relatedSessionId: booking.id,
                 stripePaymentIntentId: paymentIntentId,
-                description: `Earnings from session on ${normalizedDate.toLocaleDateString()}`,
+                description: `Earnings from session on ${normalizedDate.toLocaleDateString()} (available ${availableAt.toLocaleDateString()})`,
               },
             });
           }
@@ -1510,6 +1515,9 @@ export const postRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const mentorId = input;
 
+      // Release any matured pending earnings before returning wallet data
+      await releasePendingEarnings(mentorId);
+
       // Get or create wallet
       let wallet = await ctx.db.mentorWallet.findUnique({
         where: { mentorId },
@@ -1541,10 +1549,30 @@ export const postRouter = createTRPCRouter({
         orderBy: { createdAt: 'desc' },
       });
 
+      // Get bookings still in the hold period (funds not yet released)
+      const pendingEarnings = await ctx.db.booking.findMany({
+        where: {
+          tutorId: mentorId,
+          earningsProcessed: true,
+          fundsReleased: false,
+          mentorEarningsCents: { gt: 0 },
+        },
+        select: {
+          id: true,
+          mentorEarningsCents: true,
+          availableAt: true,
+          date: true,
+          time: true,
+          studentName: true,
+        },
+        orderBy: { availableAt: 'asc' },
+      });
+
       return {
         wallet,
         ledgerEntries,
         pendingPayouts,
+        pendingEarnings,
       };
     }),
 
@@ -1663,6 +1691,9 @@ export const postRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const { mentorClerkId, amountCents: requestedAmount } = input;
+
+      // Release any matured pending earnings before checking balance
+      await releasePendingEarnings(mentorClerkId);
 
       // Get mentor data
       const mentor = await ctx.db.user.findUnique({
