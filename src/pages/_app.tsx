@@ -7,8 +7,13 @@ import { ClerkProvider } from "@clerk/nextjs";
 import Head from "next/head";
 import NewNav from "~/components/NewNav";
 import { Toaster } from "react-hot-toast";
+import { useRouter } from "next/router";
+import CursorRipples from "~/components/CursorRipples";
 
 const MyApp: AppType = ({ Component, pageProps }) => {
+  const router = useRouter();
+  const isLandingPage = router.pathname === "/";
+
   return (
     <ClerkProvider
       {...pageProps}
@@ -38,7 +43,9 @@ const MyApp: AppType = ({ Component, pageProps }) => {
         <meta name="twitter:description" content="Connect with verified tutors from top universities" />
         <meta name="twitter:image" content="https://pathwaytutors.org/og-image.png" />
       </Head>
-      <div className="min-h-screen">
+      <div className="relative min-h-screen isolate">
+        <CursorRipples enabled={isLandingPage} />
+        <div className="relative z-10">
         <NewNav />
         {/* Page load animation wrapper */}
         <div
@@ -48,6 +55,7 @@ const MyApp: AppType = ({ Component, pageProps }) => {
           }}
         >
           <Component {...pageProps} />
+        </div>
         </div>
       </div>
     </ClerkProvider>
