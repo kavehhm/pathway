@@ -93,12 +93,6 @@ export default function ProductList({
 
           return haystacks.some((value) => value.toLowerCase().includes(q));
         })
-        .sort((a, b) => {
-          // Sort by number of paid bookings (descending)
-          const aBookings = (a as any).bookings?.length ?? 0;
-          const bBookings = (b as any).bookings?.length ?? 0;
-          return bBookings - aBookings;
-        })
     : [];
 
   return (

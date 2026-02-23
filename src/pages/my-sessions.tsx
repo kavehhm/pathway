@@ -187,29 +187,31 @@ const MySessions = () => {
                     {/* Booking Header */}
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-4">
-                        {booking.tutor.imageSrc && (
-                          <img
-                            src={booking.tutor.imageSrc}
-                            alt={`${booking.tutor.firstName} ${booking.tutor.lastName}`}
-                            className="h-16 w-16 rounded-full object-cover"
-                          />
-                        )}
-                        <div>
-                          <Link
-                            href={`/tutors/${booking.tutor.clerkId}`}
-                            className="text-lg font-semibold text-gray-900 hover:text-violet-600"
-                          >
-                            {booking.tutor.firstName} {booking.tutor.lastName}
-                          </Link>
-                          <p className="text-sm text-gray-500">
-                            {new Date(booking.date).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                            })}{' '}
-                            at {booking.time}
-                          </p>
-                        </div>
+                        <Link
+                          href={`/tutors/${booking.tutor.username}`}
+                          className="flex items-center gap-4 group"
+                        >
+                          {booking.tutor.imageSrc && (
+                            <img
+                              src={booking.tutor.imageSrc}
+                              alt={`${booking.tutor.firstName} ${booking.tutor.lastName}`}
+                              className="h-16 w-16 rounded-full object-cover ring-2 ring-transparent group-hover:ring-violet-400 transition-all"
+                            />
+                          )}
+                          <div>
+                            <span className="text-lg font-semibold text-gray-900 group-hover:text-violet-600 transition-colors">
+                              {booking.tutor.firstName} {booking.tutor.lastName}
+                            </span>
+                            <p className="text-sm text-gray-500">
+                              {new Date(booking.date).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                              })}{' '}
+                              at {booking.time}
+                            </p>
+                          </div>
+                        </Link>
                       </div>
                       {booking.review ? (
                         <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">

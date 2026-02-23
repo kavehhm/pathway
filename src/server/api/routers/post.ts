@@ -685,10 +685,22 @@ export const postRouter = createTRPCRouter({
       return { verified: true };
     }),
 
-  getSingleTutor: publicProcedure.input(z.string()).query(({ input, ctx }) => {
-    return ctx.db.user.findUnique({
+  getSingleTutor: publicProcedure.input(z.string()).query(async ({ input, ctx }) => {
+    const user = await ctx.db.user.findUnique({
       where: {
         username: input,
+      },
+      include: {
+        availability: true,
+        bookings: true
+      }
+    });
+
+    if (user) return user;
+
+    return ctx.db.user.findUnique({
+      where: {
+        clerkId: input,
       },
       include: {
         availability: true,
@@ -1434,6 +1446,7 @@ export const postRouter = createTRPCRouter({
               lastName: true,
               imageSrc: true,
               clerkId: true,
+              username: true,
             },
           },
           review: true,
@@ -1443,7 +1456,7 @@ export const postRouter = createTRPCRouter({
         },
       });
     }),
-  
+
   getTutorBookings: publicProcedure
     .input(z.string()) // tutorClerkId
     .query(async ({ ctx, input }) => {
