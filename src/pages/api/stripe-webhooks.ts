@@ -98,17 +98,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log(`Unhandled event type: ${event.type}`);
     }
 
-    // IMPORTANT: Always return 200 to acknowledge receipt
-    // Even if processing fails internally, we don't want Stripe to keep retrying
     return res.status(200).json({ received: true });
   } catch (error: any) {
-    // Log the error but still return 200 to prevent webhook retries
-    // The error is logged and can be investigated via logs
-    console.error('Error processing webhook:', error?.message || error);
-    
-    // Return 200 anyway to acknowledge receipt and stop retries
-    // Errors are handled internally (e.g., marking booking as SCHEDULING_FAILED)
-    return res.status(200).json({ received: true, error: 'Internal processing error logged' });
+    console.error('Error processing webhook:', error?.message ?? error);
+
+    // If booking wasn't found, return 500 so Stripe retries the webhook later
+    // (the booking is likely still being created by the client-side mutation).
+    // For all other errors, return 200 to prevent infinite retries on unrecoverable failures.
+    if (typeof error?.message === 'string' && error.message.startsWith('BOOKING_NOT_FOUND')) {
+      return res.status(500).json({ error: 'Booking not yet created, please retry' });
+    }
+
+    return res.status(200).json({ received: true });
   }
 }
 
@@ -165,39 +166,31 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   // Find the booking associated with this payment.
   // The booking is created by the bookSession mutation which may run after this webhook,
   // so we retry a few times with a short delay to handle the race condition.
-  let booking = await db.booking.findFirst({
-    where: { stripePaymentIntentId: paymentIntent.id },
-    include: {
-      tutor: {
-        select: {
-          firstName: true,
-          lastName: true,
-          email: true,
-          meetingLink: true,
-          timezone: true,
-          clerkId: true,
-        },
+  // Use short delays to stay well within Vercel's function timeout.
+  const bookingInclude = {
+    tutor: {
+      select: {
+        firstName: true,
+        lastName: true,
+        email: true,
+        meetingLink: true,
+        timezone: true,
+        clerkId: true,
       },
     },
+  } as const;
+
+  let booking = await db.booking.findFirst({
+    where: { stripePaymentIntentId: paymentIntent.id },
+    include: bookingInclude,
   });
 
   if (!booking) {
-    for (let attempt = 0; attempt < 5; attempt++) {
-      await new Promise((r) => setTimeout(r, 2000));
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await new Promise((r) => setTimeout(r, 1000));
       booking = await db.booking.findFirst({
         where: { stripePaymentIntentId: paymentIntent.id },
-        include: {
-          tutor: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true,
-              meetingLink: true,
-              timezone: true,
-              clerkId: true,
-            },
-          },
-        },
+        include: bookingInclude,
       });
       if (booking) break;
     }
@@ -205,16 +198,12 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
 
   if (!booking) {
     console.error(`No booking found for PaymentIntent ${paymentIntent.id} after retries`);
-    return;
+    // Throw so the outer handler returns a non-200 status.
+    // Stripe will retry the webhook later, when the booking should exist.
+    throw new Error(`BOOKING_NOT_FOUND: ${paymentIntent.id}`);
   }
 
   console.log(`Found booking ${booking.id} for PaymentIntent: ${paymentIntent.id}`);
-
-  // IDEMPOTENCY CHECK: If we already have a calendar event, don't create another
-  if (booking.calendarEventId) {
-    console.log(`Booking ${booking.id} already has calendar event ${booking.calendarEventId}, skipping`);
-    return;
-  }
 
   // Extract booking info from PaymentIntent metadata
   const studentName = paymentIntent.metadata.studentName ?? booking.studentName ?? 'Student';
@@ -229,28 +218,70 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     return;
   }
 
-  // Determine which meeting link to use
-  // If tutor has a valid meeting link, use that. Otherwise, generate Google Meet
   const tutorMeetingLink = booking.tutor.meetingLink;
   const useGoogleMeet = !isValidUrl(tutorMeetingLink);
 
+  // --- STEP 1: Send Brevo confirmation emails FIRST ---
+  // Emails are fast (~2s parallel) and must go out before any slow API calls.
+  // If Google Meet is needed, attendees will receive the link via Google's
+  // own calendar invitation email after the event is created below.
+  try {
+    const endTime = calculateEndTime(booking.time);
+    const dateStr = booking.date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    const emailMeetingLink = useGoogleMeet
+      ? 'A Google Calendar invite with the Meet link will be sent shortly.'
+      : (tutorMeetingLink ?? 'N/A');
+
+    const emailResult = await sendBookingConfirmationEmails({
+      tutorName,
+      studentName,
+      tutorEmail,
+      studentEmail,
+      date: dateStr,
+      startTime: booking.time,
+      endTime,
+      tutorTimezone,
+      studentTimezone: tutorTimezone,
+      meetingLink: emailMeetingLink,
+      calendarLink: null,
+    });
+
+    console.log(`Email results - Tutor: ${emailResult.tutorEmail.success}, Student: ${emailResult.studentEmail.success}`);
+
+    if (!emailResult.tutorEmail.success) {
+      console.error(`Failed to send tutor email:`, emailResult.tutorEmail.error);
+    }
+    if (!emailResult.studentEmail.success) {
+      console.error(`Failed to send student email:`, emailResult.studentEmail.error);
+    }
+  } catch (error: any) {
+    console.error(`Failed to send confirmation emails for booking ${booking.id}:`, error);
+  }
+
+  // --- STEP 2: Create Google Calendar event (slow — OAuth refresh + API call) ---
+  // Skip if already created (idempotency for Stripe webhook retries).
+  // If the function times out here, emails were already sent and Stripe will
+  // retry the webhook, which will skip emails and create the calendar event.
   let meetLink = tutorMeetingLink ?? '';
   let calendarEventId = '';
   let calendarHtmlLink = '';
 
-  if (useGoogleMeet) {
-    // Create Google Calendar event with Google Meet
+  if (useGoogleMeet && !booking.calendarEventId) {
     try {
       console.log(`Creating Google Calendar event for booking ${booking.id}`);
-      
-      // Parse the booking date and time
+
       const { startTime, endTime } = parseBookingDateTime(
         booking.date.toISOString().split('T')[0] ?? '',
         booking.time,
         tutorTimezone
       );
 
-      // Format the event details
       const { summary, description } = formatBookingForCalendar(tutorName, studentName);
 
       const eventDetails: CalendarEventDetails = {
@@ -266,7 +297,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       };
 
       const calendarResult = await createMeetEvent(eventDetails);
-      
+
       meetLink = calendarResult.meetLink;
       calendarEventId = calendarResult.eventId;
       calendarHtmlLink = calendarResult.htmlLink;
@@ -274,77 +305,34 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       console.log(`Created calendar event ${calendarEventId} with Meet link: ${meetLink}`);
     } catch (error: any) {
       console.error(`Failed to create calendar event for booking ${booking.id}:`, error);
-      // Mark as scheduling failed but continue to try sending emails
-      await markBookingSchedulingFailed(booking.id, error.message);
-      
-      await sendSchedulingFailureNotification(
-        booking.id,
-        tutorName,
-        studentName,
-        error.message
-      );
-      
-      // Still try to use the tutor's meeting link as fallback
+      markBookingSchedulingFailed(booking.id, error.message).catch((e: any) => {
+        console.error('Failed to mark scheduling failed:', e);
+      });
+      sendSchedulingFailureNotification(booking.id, tutorName, studentName, error.message).catch((e: any) => {
+        console.error('Failed to send scheduling failure notification:', e);
+      });
       meetLink = tutorMeetingLink ?? '';
     }
-  } else {
+  } else if (!useGoogleMeet) {
     console.log(`Using tutor's meeting link: ${tutorMeetingLink}`);
-    meetLink = tutorMeetingLink ?? '';
+  } else {
+    console.log(`Booking ${booking.id} already has calendar event, skipping creation`);
   }
 
-  // Update the booking with calendar/meeting info
-  try {
-    await db.booking.update({
-      where: { id: booking.id },
-      data: {
-        studentEmail,
-        studentName,
-        tutorEmail,
-        meetLink: meetLink || null,
-        calendarEventId: calendarEventId || null,
-        calendarHtmlLink: calendarHtmlLink || null,
-      },
-    });
-    console.log(`Updated booking ${booking.id} with meeting info`);
-  } catch (error: any) {
-    console.error(`Failed to update booking ${booking.id} with meeting info:`, error);
-  }
-
-  // Send confirmation emails via Brevo (server-side, after calendar event is created)
-  try {
-    const endTime = calculateEndTime(booking.time);
-    const dateStr = booking.date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-
-    const emailResult = await sendBookingConfirmationEmails({
-      tutorName,
+  // Update the booking with calendar/meeting info (fire-and-forget to save time)
+  db.booking.update({
+    where: { id: booking.id },
+    data: {
+      studentEmail,
       studentName,
       tutorEmail,
-      studentEmail,
-      date: dateStr,
-      startTime: booking.time,
-      endTime,
-      tutorTimezone,
-      studentTimezone: tutorTimezone,
-      meetingLink: meetLink ?? null,
-      calendarLink: calendarHtmlLink ?? null,
-    });
-
-    console.log(`Email results - Tutor: ${emailResult.tutorEmail.success}, Student: ${emailResult.studentEmail.success}`);
-    
-    if (!emailResult.tutorEmail.success) {
-      console.error(`Failed to send tutor email:`, emailResult.tutorEmail.error);
-    }
-    if (!emailResult.studentEmail.success) {
-      console.error(`Failed to send student email:`, emailResult.studentEmail.error);
-    }
-  } catch (error: any) {
-    console.error(`Failed to send confirmation emails for booking ${booking.id}:`, error);
-  }
+      meetLink: meetLink || null,
+      calendarEventId: calendarEventId || null,
+      calendarHtmlLink: calendarHtmlLink || null,
+    },
+  }).catch((error: any) => {
+    console.error(`Failed to update booking with meeting info:`, error);
+  });
 
   // Credit the tutor's wallet if bookSession hasn't already done so
   const earningsCents = booking.mentorEarningsCents;
