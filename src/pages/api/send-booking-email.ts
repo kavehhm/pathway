@@ -51,6 +51,10 @@ interface SendBookingEmailResponse {
   error?: string;
 }
 
+export const config = {
+  maxDuration: 30,
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<SendBookingEmailResponse>
@@ -87,7 +91,8 @@ export default async function handler(
     let meetingLink = params.meetingLink;
     let calendarLink = params.calendarLink;
 
-    // If there's no valid meeting link, create a Google Calendar event with Meet
+    // If there's no valid meeting link, create a Google Calendar event with Meet.
+    // Use a timeout so calendar creation can't starve the email sends.
     if (!isValidUrl(meetingLink)) {
       try {
         const timezone = tutorTimezone ?? 'America/Los_Angeles';
@@ -107,16 +112,20 @@ export default async function handler(
         };
 
         console.log(`Creating Google Calendar event for free session booking...`);
-        const calendarResult = await createMeetEvent(eventDetails);
 
-        meetingLink = calendarResult.meetLink;
-        calendarLink = calendarResult.htmlLink;
-        console.log(`Created calendar event ${calendarResult.eventId} with Meet link: ${meetingLink}`);
+        const calendarResult = await Promise.race([
+          createMeetEvent(eventDetails),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 12_000)),
+        ]);
 
-        // Update the booking record with calendar info
-        if (bookingId) {
-          try {
-            await db.booking.update({
+        if (calendarResult) {
+          meetingLink = calendarResult.meetLink;
+          calendarLink = calendarResult.htmlLink;
+          console.log(`Created calendar event ${calendarResult.eventId} with Meet link: ${meetingLink}`);
+
+          // Update booking record in the background — don't block emails on this
+          if (bookingId) {
+            db.booking.update({
               where: { id: bookingId },
               data: {
                 meetLink: meetingLink || null,
@@ -124,11 +133,13 @@ export default async function handler(
                 calendarHtmlLink: calendarLink || null,
                 tutorEmail: params.tutorEmail,
               },
+            }).catch((dbError: any) => {
+              console.error(`Failed to update booking ${bookingId}:`, dbError.message);
             });
-            console.log(`Updated booking ${bookingId} with calendar info`);
-          } catch (dbError: any) {
-            console.error(`Failed to update booking ${bookingId}:`, dbError.message);
           }
+        } else {
+          console.warn('Google Calendar event creation timed out, proceeding with emails');
+          meetingLink = 'Unable to generate - please contact your tutor';
         }
       } catch (calError: any) {
         console.error('Failed to create Google Calendar event:', calError.message);
@@ -151,29 +162,42 @@ export default async function handler(
 
     const results: SendBookingEmailResponse = { success: true };
 
+    // Send both emails in parallel to reduce total execution time
+    const emailPromises: Promise<void>[] = [];
+
     if (type === 'tutor' || type === 'both') {
-      const tutorTemplate = tutorBookingConfirmationEmail(emailParams);
-      const tutorResult = await sendEmail({
-        to: params.tutorEmail,
-        subject: tutorTemplate.subject,
-        html: tutorTemplate.html,
-        text: tutorTemplate.text,
-      });
-      results.tutorEmail = tutorResult;
-      console.log(`Tutor email to ${params.tutorEmail}: ${tutorResult.success ? 'sent' : 'failed'}`);
+      emailPromises.push(
+        (async () => {
+          const tutorTemplate = tutorBookingConfirmationEmail(emailParams);
+          const tutorResult = await sendEmail({
+            to: params.tutorEmail,
+            subject: tutorTemplate.subject,
+            html: tutorTemplate.html,
+            text: tutorTemplate.text,
+          });
+          results.tutorEmail = tutorResult;
+          console.log(`Tutor email to ${params.tutorEmail}: ${tutorResult.success ? 'sent' : 'failed'}`);
+        })()
+      );
     }
 
     if (type === 'student' || type === 'both') {
-      const studentTemplate = studentBookingConfirmationEmail(emailParams);
-      const studentResult = await sendEmail({
-        to: params.studentEmail,
-        subject: studentTemplate.subject,
-        html: studentTemplate.html,
-        text: studentTemplate.text,
-      });
-      results.studentEmail = studentResult;
-      console.log(`Student email to ${params.studentEmail}: ${studentResult.success ? 'sent' : 'failed'}`);
+      emailPromises.push(
+        (async () => {
+          const studentTemplate = studentBookingConfirmationEmail(emailParams);
+          const studentResult = await sendEmail({
+            to: params.studentEmail,
+            subject: studentTemplate.subject,
+            html: studentTemplate.html,
+            text: studentTemplate.text,
+          });
+          results.studentEmail = studentResult;
+          console.log(`Student email to ${params.studentEmail}: ${studentResult.success ? 'sent' : 'failed'}`);
+        })()
+      );
     }
+
+    await Promise.all(emailPromises);
 
     const tutorFailed = results.tutorEmail && !results.tutorEmail.success;
     const studentFailed = results.studentEmail && !results.studentEmail.success;

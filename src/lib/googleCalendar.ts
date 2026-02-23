@@ -71,16 +71,18 @@ export async function createMeetEvent(
   // Generate a unique request ID for conference creation
   const requestId = `pt-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
+  const ianaTimezone = toIanaTimezone(details.timezone);
+
   const event: calendar_v3.Schema$Event = {
     summary: details.summary,
     description: details.description,
     start: {
       dateTime: details.startTime.toISOString(),
-      timeZone: details.timezone,
+      timeZone: ianaTimezone,
     },
     end: {
       dateTime: details.endTime.toISOString(),
-      timeZone: details.timezone,
+      timeZone: ianaTimezone,
     },
     attendees: [
       {
@@ -237,16 +239,53 @@ Need help? Contact support@pathwaytutors.com
   return { summary, description };
 }
 
+const TIMEZONE_UTC_OFFSETS: Record<string, number> = {
+  'PST': -8, 'PDT': -7,
+  'MST': -7, 'MDT': -6,
+  'CST': -6, 'CDT': -5,
+  'EST': -5, 'EDT': -4,
+  'AKST': -9, 'AKDT': -8,
+  'HST': -10, 'HDT': -9,
+  'America/Los_Angeles': -8,
+  'America/Denver': -7,
+  'America/Chicago': -6,
+  'America/New_York': -5,
+  'America/Anchorage': -9,
+  'Pacific/Honolulu': -10,
+};
+
+const ABBREV_TO_IANA: Record<string, string> = {
+  'PST': 'America/Los_Angeles',
+  'PDT': 'America/Los_Angeles',
+  'MST': 'America/Denver',
+  'MDT': 'America/Denver',
+  'CST': 'America/Chicago',
+  'CDT': 'America/Chicago',
+  'EST': 'America/New_York',
+  'EDT': 'America/New_York',
+  'AKST': 'America/Anchorage',
+  'AKDT': 'America/Anchorage',
+  'HST': 'Pacific/Honolulu',
+  'HDT': 'Pacific/Honolulu',
+};
+
 /**
- * Convert a time string (e.g., "9:00 AM") and date to a Date object
- * Handles timezone conversion
+ * Convert a timezone string (abbreviation or IANA) to an IANA timezone identifier.
+ * Google Calendar API requires IANA timezone identifiers.
+ */
+export function toIanaTimezone(timezone: string): string {
+  return ABBREV_TO_IANA[timezone] ?? timezone;
+}
+
+/**
+ * Convert a time string (e.g., "9:00 AM") and date to a Date object,
+ * correctly interpreting the time in the given timezone.
  */
 export function parseBookingDateTime(
   dateStr: string,
   timeStr: string,
-  _timezone: string
+  timezone: string
 ): { startTime: Date; endTime: Date } {
-  // Parse the time string (e.g., "9:00 AM" or "2:30 PM")
   const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
   if (!match) {
     throw new Error(`Invalid time format: ${timeStr}`);
@@ -256,21 +295,27 @@ export function parseBookingDateTime(
   const minutes = parseInt(match[2] ?? '0', 10);
   const period = (match[3] ?? 'AM').toUpperCase();
 
-  // Convert to 24-hour format
   if (period === 'PM' && hours !== 12) {
     hours += 12;
   } else if (period === 'AM' && hours === 12) {
     hours = 0;
   }
 
-  // Parse the date string
-  const date = new Date(dateStr);
-  
-  // Set the time
-  date.setHours(hours, minutes, 0, 0);
+  const utcOffset = TIMEZONE_UTC_OFFSETS[timezone] ?? -8;
+  const offsetSign = utcOffset >= 0 ? '+' : '-';
+  const absOffset = Math.abs(utcOffset);
+  const offsetHours = Math.floor(absOffset);
+  const offsetMinutes = Math.round((absOffset % 1) * 60);
+  const offsetStr = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
 
-  // Create end time (1 hour later)
-  const endTime = new Date(date.getTime() + 60 * 60 * 1000);
+  const isoStr = `${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00${offsetStr}`;
+  const startTime = new Date(isoStr);
 
-  return { startTime: date, endTime };
+  if (isNaN(startTime.getTime())) {
+    throw new Error(`Failed to parse booking date/time: ${dateStr} ${timeStr} (${timezone})`);
+  }
+
+  const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+
+  return { startTime, endTime };
 }
