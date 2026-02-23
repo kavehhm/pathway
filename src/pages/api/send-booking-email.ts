@@ -51,10 +51,6 @@ interface SendBookingEmailResponse {
   error?: string;
 }
 
-export const config = {
-  maxDuration: 30,
-};
-
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<SendBookingEmailResponse>
@@ -88,81 +84,11 @@ export default async function handler(
       }
     }
 
-    const meetingLink = params.meetingLink;
-    const calendarLink = params.calendarLink;
-    const needsGoogleMeet = !isValidUrl(meetingLink);
+    let meetingLink = params.meetingLink;
+    let calendarLink = params.calendarLink;
 
-    // --- STEP 1: Send Brevo confirmation emails FIRST ---
-    // Emails are the highest priority and must go out before any slow API calls.
-    // If a Google Meet link is needed, attendees will receive it separately
-    // via the Google Calendar invitation email that Google sends automatically.
-    const emailMeetingLink = needsGoogleMeet
-      ? 'A Google Calendar invite with the Meet link will be sent shortly.'
-      : meetingLink;
-
-    const emailParams: BookingConfirmationParams = {
-      tutorName: params.tutorName,
-      studentName: params.studentName,
-      date: params.date,
-      startTime: params.startTime,
-      endTime: params.endTime,
-      timeZone: params.timeZone,
-      studentEmail: params.studentEmail,
-      tutorEmail: params.tutorEmail,
-      meetingLink: emailMeetingLink,
-      calendarLink,
-    };
-
-    const results: SendBookingEmailResponse = { success: true };
-
-    const emailPromises: Promise<void>[] = [];
-
-    if (type === 'tutor' || type === 'both') {
-      emailPromises.push(
-        (async () => {
-          const tutorTemplate = tutorBookingConfirmationEmail(emailParams);
-          const tutorResult = await sendEmail({
-            to: params.tutorEmail,
-            subject: tutorTemplate.subject,
-            html: tutorTemplate.html,
-            text: tutorTemplate.text,
-          });
-          results.tutorEmail = tutorResult;
-          console.log(`Tutor email to ${params.tutorEmail}: ${tutorResult.success ? 'sent' : 'failed'}`);
-        })()
-      );
-    }
-
-    if (type === 'student' || type === 'both') {
-      emailPromises.push(
-        (async () => {
-          const studentTemplate = studentBookingConfirmationEmail(emailParams);
-          const studentResult = await sendEmail({
-            to: params.studentEmail,
-            subject: studentTemplate.subject,
-            html: studentTemplate.html,
-            text: studentTemplate.text,
-          });
-          results.studentEmail = studentResult;
-          console.log(`Student email to ${params.studentEmail}: ${studentResult.success ? 'sent' : 'failed'}`);
-        })()
-      );
-    }
-
-    await Promise.all(emailPromises);
-
-    const tutorFailed = results.tutorEmail && !results.tutorEmail.success;
-    const studentFailed = results.studentEmail && !results.studentEmail.success;
-
-    if (tutorFailed ?? studentFailed) {
-      results.success = false;
-    }
-
-    // --- STEP 2: Create Google Calendar event AFTER emails are sent ---
-    // This is the slow part (OAuth refresh + API call + Meet provisioning).
-    // If the function times out here, emails were already sent and Google's
-    // own invitation email will deliver the Meet link to attendees.
-    if (needsGoogleMeet) {
+    // If there's no valid meeting link, create a Google Calendar event with Meet
+    if (!isValidUrl(meetingLink)) {
       try {
         const timezone = tutorTimezone ?? 'America/Los_Angeles';
         const { startTime, endTime } = parseBookingDateTime(params.date, params.startTime, timezone);
@@ -183,26 +109,80 @@ export default async function handler(
         console.log(`Creating Google Calendar event for free session booking...`);
         const calendarResult = await createMeetEvent(eventDetails);
 
-        results.meetLink = calendarResult.meetLink;
-        console.log(`Created calendar event ${calendarResult.eventId} with Meet link: ${calendarResult.meetLink}`);
+        meetingLink = calendarResult.meetLink;
+        calendarLink = calendarResult.htmlLink;
+        console.log(`Created calendar event ${calendarResult.eventId} with Meet link: ${meetingLink}`);
 
+        // Update the booking record with calendar info
         if (bookingId) {
-          db.booking.update({
-            where: { id: bookingId },
-            data: {
-              meetLink: calendarResult.meetLink ?? null,
-              calendarEventId: calendarResult.eventId ?? null,
-              calendarHtmlLink: calendarResult.htmlLink ?? null,
-              tutorEmail: params.tutorEmail,
-            },
-          }).catch((dbError: any) => {
+          try {
+            await db.booking.update({
+              where: { id: bookingId },
+              data: {
+                meetLink: meetingLink || null,
+                calendarEventId: calendarResult.eventId || null,
+                calendarHtmlLink: calendarLink || null,
+                tutorEmail: params.tutorEmail,
+              },
+            });
+            console.log(`Updated booking ${bookingId} with calendar info`);
+          } catch (dbError: any) {
             console.error(`Failed to update booking ${bookingId}:`, dbError.message);
-          });
+          }
         }
       } catch (calError: any) {
         console.error('Failed to create Google Calendar event:', calError.message);
+        meetingLink = 'Unable to generate - please contact your tutor';
       }
-    } else if (meetingLink) {
+    }
+
+    const emailParams: BookingConfirmationParams = {
+      tutorName: params.tutorName,
+      studentName: params.studentName,
+      date: params.date,
+      startTime: params.startTime,
+      endTime: params.endTime,
+      timeZone: params.timeZone,
+      studentEmail: params.studentEmail,
+      tutorEmail: params.tutorEmail,
+      meetingLink,
+      calendarLink,
+    };
+
+    const results: SendBookingEmailResponse = { success: true };
+
+    if (type === 'tutor' || type === 'both') {
+      const tutorTemplate = tutorBookingConfirmationEmail(emailParams);
+      const tutorResult = await sendEmail({
+        to: params.tutorEmail,
+        subject: tutorTemplate.subject,
+        html: tutorTemplate.html,
+        text: tutorTemplate.text,
+      });
+      results.tutorEmail = tutorResult;
+      console.log(`Tutor email to ${params.tutorEmail}: ${tutorResult.success ? 'sent' : 'failed'}`);
+    }
+
+    if (type === 'student' || type === 'both') {
+      const studentTemplate = studentBookingConfirmationEmail(emailParams);
+      const studentResult = await sendEmail({
+        to: params.studentEmail,
+        subject: studentTemplate.subject,
+        html: studentTemplate.html,
+        text: studentTemplate.text,
+      });
+      results.studentEmail = studentResult;
+      console.log(`Student email to ${params.studentEmail}: ${studentResult.success ? 'sent' : 'failed'}`);
+    }
+
+    const tutorFailed = results.tutorEmail && !results.tutorEmail.success;
+    const studentFailed = results.studentEmail && !results.studentEmail.success;
+
+    if (tutorFailed ?? studentFailed) {
+      results.success = false;
+    }
+
+    if (meetingLink) {
       results.meetLink = meetingLink;
     }
 
