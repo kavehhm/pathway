@@ -133,73 +133,52 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
       }
     }
 
-    // Get tutor info for emails (since createBooking doesn't return it)
-    const tutorInfo = tutor.data ? {
-      tutorName: `${tutor.data.firstName} ${tutor.data.lastName}`,
-      tutorEmail: tutor.data.email,
-      meetingLink: tutor.data.meetingLink,
-      timezone: tutor.data.timezone,
-    } : null;
-
-    // Send emails if we have tutor info
-    if (tutorInfo) {
-      // Get student's timezone (we need to import getCurrentTimezone)
+    // Send confirmation emails + create Google Calendar event via the same
+    // server endpoint that free sessions use.  This avoids the race condition
+    // where the Stripe webhook fires before the booking exists in the DB.
+    if (tutor.data && paymentIntent) {
       const studentTimezone = getCurrentTimezone();
-      
-      // Calculate end time (start time + 1 hour) for student timezone using robust parsing
-      const studentStartMinutes = parse12HourTimeToMinutes(time);
-      if (studentStartMinutes === null) {
-        console.error('Failed to parse time for email:', time);
-        return;
-      }
-      const studentEndMinutes = studentStartMinutes + 60; // Add 1 hour
-      const studentEndTime = formatMinutesTo12Hour(studentEndMinutes);
+      const tutorTz = tutor.data.timezone ?? 'PST';
 
-      // Convert times to tutor's timezone
-      const tutorStartTime = convertTimeBetweenTimezones(
-        time,
-        studentTimezone,
-        tutorInfo.timezone ?? 'PST'
-      );
-      
-      // Calculate tutor end time using robust parsing
+      const tutorStartTime = convertTimeBetweenTimezones(time, studentTimezone, tutorTz);
       const tutorStartMinutes = parse12HourTimeToMinutes(tutorStartTime);
-      if (tutorStartMinutes === null) {
-        console.error('Failed to parse tutor start time for email:', tutorStartTime);
-        return;
-      }
-      const tutorEndMinutes = tutorStartMinutes + 60; // Add 1 hour
-      const tutorEndTime = formatMinutesTo12Hour(tutorEndMinutes);
+      const tutorEndTime = tutorStartMinutes !== null
+        ? formatMinutesTo12Hour(tutorStartMinutes + 60)
+        : tutorStartTime;
 
-      // Email params for tutor (in tutor's timezone)
-      const tutorEmailParams = {
-        tutor_name: tutorInfo.tutorName,
-        student_name: studentName,
-        date,
-        start_time: tutorStartTime,
-        end_time: tutorEndTime,
-        timeZone: tutorInfo.timezone ?? 'PST',
-        student_email: studentEmail,
-        tutor_email: tutorInfo.tutorEmail,
-        location: tutorInfo.meetingLink ?? 'N/A',
-      };
+      const dateStr = date;
 
-      // Email params for student (in student's timezone)
-      const studentEmailParams = {
-        tutor_name: tutorInfo.tutorName,
-        student_name: studentName,
-        date,
-        start_time: time,
-        end_time: studentEndTime,
-        timeZone: studentTimezone,
-        student_email: studentEmail,
-        tutor_email: tutorInfo.tutorEmail,
-        location: tutorInfo.meetingLink ?? 'N/A',
-      };
-
-      // Confirmation emails are sent server-side from the Stripe webhook
-      // (after Google Calendar event + Meet link are created)
-      console.log('Booking confirmed - confirmation emails will be sent from webhook');
+      fetch('/api/send-booking-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'both',
+          bookingId,
+          tutorTimezone: tutor.data.timezone ?? 'America/Los_Angeles',
+          params: {
+            tutorName: `${tutor.data.firstName} ${tutor.data.lastName}`,
+            studentName,
+            date: dateStr,
+            startTime: tutorStartTime,
+            endTime: tutorEndTime,
+            timeZone: tutorTz,
+            studentEmail,
+            tutorEmail: tutor.data.email,
+            meetingLink: tutor.data.meetingLink ?? '',
+          },
+        }),
+      })
+        .then((r) => r.json())
+        .then((result: any) => {
+          if (result.success) {
+            console.log('Paid session confirmation emails sent successfully');
+          } else {
+            console.error('Failed to send some paid session emails:', result);
+          }
+        })
+        .catch((error) => {
+          console.error('Error sending paid session booking emails:', error);
+        });
     }
 
     toast.success('Session booked successfully!');
