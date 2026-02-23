@@ -88,64 +88,17 @@ export default async function handler(
       }
     }
 
-    let meetingLink = params.meetingLink;
-    let calendarLink = params.calendarLink;
+    const meetingLink = params.meetingLink;
+    const calendarLink = params.calendarLink;
+    const needsGoogleMeet = !isValidUrl(meetingLink);
 
-    // If there's no valid meeting link, create a Google Calendar event with Meet.
-    // Use a timeout so calendar creation can't starve the email sends.
-    if (!isValidUrl(meetingLink)) {
-      try {
-        const timezone = tutorTimezone ?? 'America/Los_Angeles';
-        const { startTime, endTime } = parseBookingDateTime(params.date, params.startTime, timezone);
-        const { summary, description } = formatBookingForCalendar(params.tutorName, params.studentName);
-
-        const eventDetails: CalendarEventDetails = {
-          summary,
-          description,
-          startTime,
-          endTime,
-          timezone,
-          tutorEmail: params.tutorEmail,
-          studentEmail: params.studentEmail,
-          tutorName: params.tutorName,
-          studentName: params.studentName,
-        };
-
-        console.log(`Creating Google Calendar event for free session booking...`);
-
-        const calendarResult = await Promise.race([
-          createMeetEvent(eventDetails),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 12_000)),
-        ]);
-
-        if (calendarResult) {
-          meetingLink = calendarResult.meetLink;
-          calendarLink = calendarResult.htmlLink;
-          console.log(`Created calendar event ${calendarResult.eventId} with Meet link: ${meetingLink}`);
-
-          // Update booking record in the background — don't block emails on this
-          if (bookingId) {
-            db.booking.update({
-              where: { id: bookingId },
-              data: {
-                meetLink: meetingLink || null,
-                calendarEventId: calendarResult.eventId || null,
-                calendarHtmlLink: calendarLink || null,
-                tutorEmail: params.tutorEmail,
-              },
-            }).catch((dbError: any) => {
-              console.error(`Failed to update booking ${bookingId}:`, dbError.message);
-            });
-          }
-        } else {
-          console.warn('Google Calendar event creation timed out, proceeding with emails');
-          meetingLink = 'Unable to generate - please contact your tutor';
-        }
-      } catch (calError: any) {
-        console.error('Failed to create Google Calendar event:', calError.message);
-        meetingLink = 'Unable to generate - please contact your tutor';
-      }
-    }
+    // --- STEP 1: Send Brevo confirmation emails FIRST ---
+    // Emails are the highest priority and must go out before any slow API calls.
+    // If a Google Meet link is needed, attendees will receive it separately
+    // via the Google Calendar invitation email that Google sends automatically.
+    const emailMeetingLink = needsGoogleMeet
+      ? 'A Google Calendar invite with the Meet link will be sent shortly.'
+      : meetingLink;
 
     const emailParams: BookingConfirmationParams = {
       tutorName: params.tutorName,
@@ -156,13 +109,12 @@ export default async function handler(
       timeZone: params.timeZone,
       studentEmail: params.studentEmail,
       tutorEmail: params.tutorEmail,
-      meetingLink,
+      meetingLink: emailMeetingLink,
       calendarLink,
     };
 
     const results: SendBookingEmailResponse = { success: true };
 
-    // Send both emails in parallel to reduce total execution time
     const emailPromises: Promise<void>[] = [];
 
     if (type === 'tutor' || type === 'both') {
@@ -206,7 +158,51 @@ export default async function handler(
       results.success = false;
     }
 
-    if (meetingLink) {
+    // --- STEP 2: Create Google Calendar event AFTER emails are sent ---
+    // This is the slow part (OAuth refresh + API call + Meet provisioning).
+    // If the function times out here, emails were already sent and Google's
+    // own invitation email will deliver the Meet link to attendees.
+    if (needsGoogleMeet) {
+      try {
+        const timezone = tutorTimezone ?? 'America/Los_Angeles';
+        const { startTime, endTime } = parseBookingDateTime(params.date, params.startTime, timezone);
+        const { summary, description } = formatBookingForCalendar(params.tutorName, params.studentName);
+
+        const eventDetails: CalendarEventDetails = {
+          summary,
+          description,
+          startTime,
+          endTime,
+          timezone,
+          tutorEmail: params.tutorEmail,
+          studentEmail: params.studentEmail,
+          tutorName: params.tutorName,
+          studentName: params.studentName,
+        };
+
+        console.log(`Creating Google Calendar event for free session booking...`);
+        const calendarResult = await createMeetEvent(eventDetails);
+
+        results.meetLink = calendarResult.meetLink;
+        console.log(`Created calendar event ${calendarResult.eventId} with Meet link: ${calendarResult.meetLink}`);
+
+        if (bookingId) {
+          db.booking.update({
+            where: { id: bookingId },
+            data: {
+              meetLink: calendarResult.meetLink ?? null,
+              calendarEventId: calendarResult.eventId ?? null,
+              calendarHtmlLink: calendarResult.htmlLink ?? null,
+              tutorEmail: params.tutorEmail,
+            },
+          }).catch((dbError: any) => {
+            console.error(`Failed to update booking ${bookingId}:`, dbError.message);
+          });
+        }
+      } catch (calError: any) {
+        console.error('Failed to create Google Calendar event:', calError.message);
+      }
+    } else if (meetingLink) {
       results.meetLink = meetingLink;
     }
 
