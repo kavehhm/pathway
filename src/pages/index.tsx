@@ -123,8 +123,6 @@ export default function Home() {
           name="description"
           content="Pathway helps you find and book a call with someone who just did what you’re trying to do — internships, transfers, tough classes, or admissions."
         />
-        <link rel="icon" href="/ourlogo720.png" />
-        
         {/* Open Graph / iMessage preview metadata */}
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://www.pathwaytutors.com" />
