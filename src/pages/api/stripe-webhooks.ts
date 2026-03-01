@@ -14,6 +14,7 @@ import {
   calculateEndTime,
 } from '~/lib/sendBookingEmails';
 import { isValidUrl } from '~/lib/validateUrl';
+import { issueTutorCancelToken } from '~/lib/bookingActions';
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
@@ -240,6 +241,15 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   const useGoogleMeet = !isValidUrl(tutorMeetingLink);
 
   try {
+    let tutorCancelUrl: string | null = null;
+
+    try {
+      const tokenResult = await issueTutorCancelToken(booking.id);
+      tutorCancelUrl = tokenResult.cancelUrl;
+    } catch (tokenError) {
+      console.error(`Failed to issue tutor cancel token for booking ${booking.id}:`, tokenError);
+    }
+
     const endTimeStr = calculateEndTime(booking.time);
     const dateStr = booking.date.toLocaleDateString('en-US', {
       weekday: 'long',
@@ -264,6 +274,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       studentTimezone: tutorTimezone,
       meetingLink: emailMeetingLink,
       calendarLink: null,
+      tutorCancelUrl,
     });
 
     diag.emailsSent = {

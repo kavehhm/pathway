@@ -172,6 +172,20 @@ model Booking {
   calendarEventId       String?  // Google Calendar event ID
   meetLink              String?  // Google Meet link (or tutor's custom meeting link)
   calendarHtmlLink      String?  // Google Calendar event link for viewing
+  // Tokenized booking actions for guest-safe flows
+  tutorCancelTokenHash          String?
+  tutorCancelTokenExpiresAt     DateTime?
+  tutorCancelTokenUsedAt        DateTime?
+  studentRescheduleTokenHash    String?
+  studentRescheduleTokenExpiresAt DateTime?
+  studentRescheduleTokenUsedAt  DateTime?
+  studentRefundTokenHash        String?
+  studentRefundTokenExpiresAt   DateTime?
+  studentRefundTokenUsedAt      DateTime?
+  // Cancellation/refund audit fields
+  tutorCancelledAt      DateTime?
+  refundedAt            DateTime?
+  stripeRefundId        String?
   tutor                 User     @relation("TutorBookings", fields: [tutorId], references: [clerkId])
   review                Review?  @relation("BookingReview")
 
@@ -181,6 +195,9 @@ model Booking {
   @@index([studentClerkId])
   @@index([stripePaymentIntentId])
   @@index([calendarEventId])
+  @@index([tutorCancelTokenHash])
+  @@index([studentRescheduleTokenHash])
+  @@index([studentRefundTokenHash])
 }
 
 model Course {

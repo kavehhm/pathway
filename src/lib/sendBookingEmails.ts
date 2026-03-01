@@ -23,6 +23,7 @@ export interface BookingEmailParams {
   studentTimezone: string;
   meetingLink: string | null;
   calendarLink?: string | null;
+  tutorCancelUrl?: string | null;
 }
 
 /**
@@ -94,6 +95,7 @@ export async function sendBookingConfirmationEmails(
     tutorEmail: params.tutorEmail,
     meetingLink: meetingLinkDisplay,
     calendarLink: params.calendarLink ?? undefined,
+    tutorCancelUrl: params.tutorCancelUrl ?? undefined,
   });
 
   // Prepare student email (in student's timezone)

@@ -16,6 +16,7 @@ export interface BookingConfirmationParams {
   tutorEmail: string;
   meetingLink: string;
   calendarLink?: string;
+  tutorCancelUrl?: string;
 }
 
 /**
@@ -149,6 +150,14 @@ export function tutorBookingConfirmationEmail(params: BookingConfirmationParams)
     </div>
     ` : ''}
 
+    ${params.tutorCancelUrl ? `
+    <div style="margin-top: 20px; padding: 16px; border: 1px solid #fee2e2; border-radius: 8px; background: #fef2f2;">
+      <p style="margin: 0 0 10px; color: #991b1b; font-weight: 600;">Need to cancel this session?</p>
+      <p style="margin: 0 0 12px; color: #7f1d1d; font-size: 14px;">If you cannot make this meeting, use the secure link below so your student can reschedule or request a refund.</p>
+      <a href="${params.tutorCancelUrl}" style="display: inline-block; background: #dc2626; color: #fff !important; padding: 10px 16px; border-radius: 6px; text-decoration: none; font-weight: 600;">Cancel This Session</a>
+    </div>
+    ` : ''}
+
     <p style="margin-top: 24px;">Please be ready a few minutes before the scheduled time. If you need to reschedule or cancel, please contact the student directly.</p>
   </div>
   <div class="footer">
@@ -174,6 +183,7 @@ Time: ${params.startTime} - ${params.endTime} (${params.timeZone})
 Student Email: ${params.studentEmail}
 Meeting Link: ${params.meetingLink}
 ${params.calendarLink ? `A Google Calendar invitation has been sent to your email.` : ''}
+${params.tutorCancelUrl ? `\nNeed to cancel this session?\nUse this secure link: ${params.tutorCancelUrl}\n` : ''}
 
 Please be ready a few minutes before the scheduled time. If you need to reschedule or cancel, please contact the student directly.
 

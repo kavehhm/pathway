@@ -24,6 +24,7 @@ import {
 } from '~/lib/googleCalendar';
 import { isValidUrl } from '~/lib/validateUrl';
 import { db } from '~/server/db';
+import { issueTutorCancelToken } from '~/lib/bookingActions';
 
 interface SendBookingEmailRequest {
   type: 'tutor' | 'student' | 'both';
@@ -86,6 +87,7 @@ export default async function handler(
 
     let meetingLink = params.meetingLink;
     let calendarLink = params.calendarLink;
+    let tutorCancelUrl: string | undefined;
 
     // If there's no valid meeting link, create a Google Calendar event with Meet
     if (!isValidUrl(meetingLink)) {
@@ -147,11 +149,22 @@ export default async function handler(
       tutorEmail: params.tutorEmail,
       meetingLink,
       calendarLink,
+      tutorCancelUrl,
     };
 
     const results: SendBookingEmailResponse = { success: true };
 
     if (type === 'tutor' || type === 'both') {
+      if (bookingId) {
+        try {
+          const tokenResult = await issueTutorCancelToken(bookingId);
+          tutorCancelUrl = tokenResult.cancelUrl;
+          emailParams.tutorCancelUrl = tutorCancelUrl;
+        } catch (tokenError) {
+          console.error(`Failed to create tutor cancel token for booking ${bookingId}:`, tokenError);
+        }
+      }
+
       const tutorTemplate = tutorBookingConfirmationEmail(emailParams);
       const tutorResult = await sendEmail({
         to: params.tutorEmail,
@@ -178,7 +191,7 @@ export default async function handler(
     const tutorFailed = results.tutorEmail && !results.tutorEmail.success;
     const studentFailed = results.studentEmail && !results.studentEmail.success;
 
-    if (tutorFailed ?? studentFailed) {
+    if (Boolean(tutorFailed) || Boolean(studentFailed)) {
       results.success = false;
     }
 

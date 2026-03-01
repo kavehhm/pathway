@@ -693,7 +693,13 @@ export const postRouter = createTRPCRouter({
       },
       include: {
         availability: true,
-        bookings: true
+        bookings: {
+          where: {
+            status: {
+              notIn: ['cancelled_by_tutor', 'refunded'],
+            },
+          },
+        },
       }
     });
 
@@ -705,7 +711,13 @@ export const postRouter = createTRPCRouter({
       },
       include: {
         availability: true,
-        bookings: true
+        bookings: {
+          where: {
+            status: {
+              notIn: ['cancelled_by_tutor', 'refunded'],
+            },
+          },
+        },
       }
     });
   }),
