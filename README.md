@@ -2,6 +2,16 @@
 
 Pathway Tutors is a tutor marketplace built with Next.js, tRPC, Prisma, Clerk, and Stripe.
 
+## Screenshots
+
+### Landing Page
+
+![Pathway Tutors Landing Page](public/PathwayLandingPage.png)
+
+### Tutors Page
+
+![Pathway Tutors Tutors Page](public/PathwayTutorsPage.png)
+
 ## What Is Active
 
 - Tutor discovery and profile filtering (school, major, subjects, courses, pricing, career tags)
