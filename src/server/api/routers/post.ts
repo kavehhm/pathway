@@ -1334,6 +1334,36 @@ export const postRouter = createTRPCRouter({
         throw new Error('Can only review paid sessions');
       }
 
+      if (booking.tutorId !== input.tutorClerkId) {
+        throw new Error('Tutor does not match this booking');
+      }
+
+      if (booking.studentClerkId !== input.studentClerkId) {
+        throw new Error('Only the student who booked this session can review it');
+      }
+
+      // One review per student+tutor pair.
+      const existingTutorReview = await ctx.db.review.findFirst({
+        where: {
+          studentClerkId: input.studentClerkId,
+          tutorClerkId: input.tutorClerkId,
+        },
+      });
+
+      if (existingTutorReview) {
+        if (existingTutorReview.bookingId === input.bookingId) {
+          return ctx.db.review.update({
+            where: { id: existingTutorReview.id },
+            data: {
+              rating: input.rating,
+              reviewText: input.reviewText,
+            },
+          });
+        }
+
+        throw new Error('You have already reviewed this tutor. Edit your existing review instead.');
+      }
+
       // Check if review already exists
       const existingReview = await ctx.db.review.findUnique({
         where: { bookingId: input.bookingId },
@@ -1450,7 +1480,7 @@ export const postRouter = createTRPCRouter({
   getReviewableBookings: publicProcedure
     .input(z.string()) // studentClerkId
     .query(async ({ ctx, input }) => {
-      return ctx.db.booking.findMany({
+      const bookings = await ctx.db.booking.findMany({
         where: {
           studentClerkId: input,
           status: 'completed',
@@ -1471,6 +1501,49 @@ export const postRouter = createTRPCRouter({
         orderBy: {
           date: 'desc',
         },
+      });
+
+      const tutorIds = [...new Set(bookings.map((booking) => booking.tutor.clerkId))];
+      const tutorReviews =
+        tutorIds.length > 0
+          ? await ctx.db.review.findMany({
+              where: {
+                studentClerkId: input,
+                tutorClerkId: {
+                  in: tutorIds,
+                },
+              },
+              orderBy: {
+                createdAt: 'desc',
+              },
+            })
+          : [];
+
+      const latestReviewByTutor = new Map<string, (typeof tutorReviews)[number]>();
+      for (const review of tutorReviews) {
+        if (!latestReviewByTutor.has(review.tutorClerkId)) {
+          latestReviewByTutor.set(review.tutorClerkId, review);
+        }
+      }
+
+      const latestBookingByTutor = new Map<string, string>();
+      for (const booking of bookings) {
+        if (!latestBookingByTutor.has(booking.tutor.clerkId)) {
+          latestBookingByTutor.set(booking.tutor.clerkId, booking.id);
+        }
+      }
+
+      return bookings.map((booking) => {
+        const tutorReview = latestReviewByTutor.get(booking.tutor.clerkId) ?? null;
+        const reviewAnchorBookingId = tutorReview
+          ? tutorReview.bookingId
+          : latestBookingByTutor.get(booking.tutor.clerkId);
+
+        return {
+          ...booking,
+          tutorReview,
+          isReviewTarget: booking.id === reviewAnchorBookingId,
+        };
       });
     }),
 

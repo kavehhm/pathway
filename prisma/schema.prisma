@@ -243,6 +243,7 @@ model Review {
   @@index([bookingId])
   @@index([tutorClerkId])
   @@index([studentClerkId])
+  @@unique([studentClerkId, tutorClerkId])
   @@index([rating])
   @@index([createdAt])
 }

@@ -10,7 +10,6 @@ const MySessions = () => {
   const { user } = useUser();
   const [selectedBooking, setSelectedBooking] = useState<string | null>(null);
   const [rating, setRating] = useState(0);
-  const [hoveredRating, setHoveredRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
   const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
 
@@ -25,6 +24,7 @@ const MySessions = () => {
     user?.id ?? "",
     { enabled: !!user?.id }
   );
+  const studentSessionCards = reviewableBookings.data?.filter((booking) => booking.isReviewTarget) ?? [];
 
   const createReview = api.post.createReview.useMutation({
     onSuccess: () => {
@@ -79,9 +79,9 @@ const MySessions = () => {
 
   const handleEditReview = (booking: any) => {
     setSelectedBooking(booking.id);
-    setEditingReviewId(booking.review.id);
-    setRating(booking.review.rating);
-    setReviewText(booking.review.reviewText || "");
+    setEditingReviewId(booking.tutorReview.id);
+    setRating(booking.tutorReview.rating);
+    setReviewText(booking.tutorReview.reviewText || "");
   };
 
   const StarRating = ({ value, onChange, interactive = true }: { value: number; onChange?: (val: number) => void; interactive?: boolean }) => {
@@ -176,9 +176,9 @@ const MySessions = () => {
             <div className="text-center py-12">
               <p className="text-gray-500">Loading your sessions...</p>
             </div>
-          ) : reviewableBookings.data && reviewableBookings.data.length > 0 ? (
+          ) : studentSessionCards.length > 0 ? (
             <div className="space-y-6">
-              {reviewableBookings.data.map((booking) => (
+              {studentSessionCards.map((booking) => (
                 <div
                   key={booking.id}
                   className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden"
@@ -213,7 +213,7 @@ const MySessions = () => {
                           </div>
                         </Link>
                       </div>
-                      {booking.review ? (
+                      {booking.tutorReview ? (
                         <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
                           Reviewed
                         </span>
@@ -225,10 +225,10 @@ const MySessions = () => {
                     </div>
 
                     {/* Existing Review Display */}
-                    {booking.review && selectedBooking !== booking.id && (
+                    {booking.tutorReview && selectedBooking !== booking.id && booking.isReviewTarget && (
                       <div className="mt-6 rounded-lg bg-gray-50 p-4">
                         <div className="flex items-center justify-between mb-2">
-                          <StarRating value={booking.review.rating} interactive={false} />
+                          <StarRating value={booking.tutorReview.rating} interactive={false} />
                           <button
                             onClick={() => handleEditReview(booking)}
                             className="text-sm font-medium text-violet-600 hover:text-violet-700"
@@ -236,22 +236,22 @@ const MySessions = () => {
                             Edit Review
                           </button>
                         </div>
-                        {booking.review.reviewText && (
-                          <p className="mt-2 text-gray-700">{booking.review.reviewText}</p>
+                        {booking.tutorReview.reviewText && (
+                          <p className="mt-2 text-gray-700">{booking.tutorReview.reviewText}</p>
                         )}
-                        {booking.review.tutorResponse && (
+                        {booking.tutorReview.tutorResponse && (
                           <div className="mt-4 border-t border-gray-200 pt-4">
                             <p className="text-sm font-semibold text-gray-900 mb-1">
                               Response from {booking.tutor.firstName}:
                             </p>
-                            <p className="text-sm text-gray-700">{booking.review.tutorResponse}</p>
+                            <p className="text-sm text-gray-700">{booking.tutorReview.tutorResponse}</p>
                           </div>
                         )}
                       </div>
                     )}
 
                     {/* Review Form */}
-                    {(!booking.review || selectedBooking === booking.id) && (
+                    {booking.isReviewTarget && (!booking.tutorReview || selectedBooking === booking.id) && (
                       <div className="mt-6">
                         <div className="space-y-4">
                           <div>
@@ -292,7 +292,7 @@ const MySessions = () => {
                                 "Submit Review"
                               )}
                             </button>
-                            {(selectedBooking === booking.id && booking.review) && (
+                            {(selectedBooking === booking.id && booking.tutorReview) && (
                               <button
                                 onClick={() => {
                                   setSelectedBooking(null);
@@ -419,4 +419,3 @@ const MySessions = () => {
 };
 
 export default MySessions;
-
