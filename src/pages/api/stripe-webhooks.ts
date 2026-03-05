@@ -15,6 +15,7 @@ import {
 } from '~/lib/sendBookingEmails';
 import { isValidUrl } from '~/lib/validateUrl';
 import { issueTutorCancelToken } from '~/lib/bookingActions';
+import { distributePlatformProfit } from '~/lib/platformProfitDistribution';
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
@@ -75,10 +76,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(200).json({ received: true, event: event.type, diagnostics: diag });
       }
 
+      case 'balance.available': {
+        const distribution = await distributePlatformProfit('balance_available_webhook', event.id);
+        return res.status(200).json({
+          received: true,
+          event: event.type,
+          ownerDistribution: distribution,
+        });
+      }
+
       case 'payment_intent.payment_failed': {
         const failedPi = event.data.object;
         handlePaymentIntentFailed(failedPi);
         return res.status(200).json({ received: true, event: event.type });
+      }
+
+      case 'charge.refunded':
+      case 'refund.updated': {
+        const distribution = await distributePlatformProfit('refund_webhook', event.id);
+        return res.status(200).json({
+          received: true,
+          event: event.type,
+          ownerDistribution: distribution,
+        });
       }
 
       case 'transfer.created': {

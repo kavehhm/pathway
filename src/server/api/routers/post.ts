@@ -7,11 +7,21 @@ import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { getSchoolPrestigeRank } from "~/schoolPrestige";
 import { isValidUrl } from "~/lib/validateUrl";
 import { releasePendingEarnings } from "~/lib/releasePendingEarnings";
+import { distributePlatformProfit } from "~/lib/platformProfitDistribution";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
   apiVersion: "2025-06-30.basil",
 });
+
+const NO_PLATFORM_FEE_TUTOR_IDS = new Set([
+  // Emmett Funston
+  "fe3c8020-c4e1-4185-aaaf-28cd08633687",
+  "user_2aNddSpfyzKdMxXrQjRA7UBxDGW",
+  // Kaveh Malekzadeh
+  "877215c3-79b9-4254-9dc7-56f450c1227b",
+  "user_2ZgVzd9II7Y4rhGnAlq3hvgavGn",
+]);
 
 let cachedCompanies: string[] | null = null;
 let cachedCompaniesMtimeMs: number | null = null;
@@ -807,18 +817,23 @@ export const postRouter = createTRPCRouter({
         // Verify tutor exists (no longer require Stripe account for booking)
         const tutor = await ctx.db.user.findUnique({
           where: { clerkId: tutorId },
-          select: { id: true, firstName: true, lastName: true }
+          select: { id: true, clerkId: true, firstName: true, lastName: true }
         });
 
         if (!tutor) {
           throw new Error('Tutor not found');
         }
 
-        // Calculate platform fee (10% of the total amount)
-        const platformFee = Math.round(amount * 0.10);
+        const isNoFeeTutor =
+          NO_PLATFORM_FEE_TUTOR_IDS.has(tutor.id) ||
+          NO_PLATFORM_FEE_TUTOR_IDS.has(tutor.clerkId);
+
+        // Default platform fee is 10%, except for whitelisted admin tutor profiles.
+        const platformFeeRate = isNoFeeTutor ? 0 : 0.10;
+        const platformFee = Math.round(amount * platformFeeRate);
         const tutorAmount = amount - platformFee;
 
-        console.log(`Payment breakdown: Total: $${amount/100}, Platform fee: $${platformFee/100}, Tutor receives: $${tutorAmount/100}`);
+        console.log(`Payment breakdown: Total: $${amount/100}, Platform fee: $${platformFee/100}, Tutor receives: $${tutorAmount/100}, no-fee tutor: ${isNoFeeTutor}`);
 
         // Create a PaymentIntent WITHOUT transfer_data (Separate Charges and Transfers)
         // Funds go to platform account, then transferred to mentor on withdraw
@@ -1243,6 +1258,18 @@ export const postRouter = createTRPCRouter({
         });
 
         console.log('Booking created with payment info and wallet credited:', result.id);
+
+        // Best-effort owner profit distribution:
+        // only transfers true excess funds after tutor liabilities + reserve are covered.
+        try {
+          const distribution = await distributePlatformProfit(
+            'booking_created',
+            `booking_${result.id}`,
+          );
+          console.log('Owner profit distribution result:', distribution);
+        } catch (distributionError) {
+          console.error('Owner profit distribution failed:', distributionError);
+        }
 
         // Get tutor information for email
         const tutor = await ctx.db.user.findUnique({
@@ -2418,6 +2445,20 @@ export const postRouter = createTRPCRouter({
         0
       );
 
+      // Current Stripe available balance (USD) and true distributable profit.
+      const stripeBalance = await stripe.balance.retrieve();
+      const stripeAvailableUsd = stripeBalance.available.find((entry) => entry.currency === 'usd');
+      const stripeAvailableCents = stripeAvailableUsd?.amount ?? 0;
+      const tutorLiabilitiesCents = totalOwedToMentors;
+      const fixedReserveCents = parseInt(process.env.PLATFORM_PROFIT_FIXED_RESERVE_CENTS ?? '5000', 10);
+      const liabilityReserveBps = parseInt(process.env.PLATFORM_PROFIT_LIABILITY_RESERVE_BPS ?? '500', 10);
+      const reserveFromLiabilities = Math.floor((tutorLiabilitiesCents * liabilityReserveBps) / 10000);
+      const profitReserveCents = Math.max(fixedReserveCents, reserveFromLiabilities);
+      const distributableProfitCents = Math.max(
+        0,
+        stripeAvailableCents - tutorLiabilitiesCents - profitReserveCents
+      );
+
       // Get booking stats
       const bookings = await ctx.db.booking.findMany({
         where: {
@@ -2460,6 +2501,17 @@ export const postRouter = createTRPCRouter({
         _count: true,
       });
 
+      const ownerPayouts = await ctx.db.platformOwnerPayout.groupBy({
+        by: ['owner'],
+        where: { status: 'PAID' },
+        _sum: { amountCents: true },
+      });
+
+      const ownerPaidTotals = {
+        emmett: ownerPayouts.find((p) => p.owner === 'EMMETT')?._sum.amountCents ?? 0,
+        kaveh: ownerPayouts.find((p) => p.owner === 'KAVEH')?._sum.amountCents ?? 0,
+      };
+
       // Get pending/processing payouts
       const pendingPayouts = await ctx.db.mentorPayout.findMany({
         where: {
@@ -2479,7 +2531,7 @@ export const postRouter = createTRPCRouter({
       // Calculate safe to withdraw
       // Platform keeps: total revenue - total owed to mentors - already paid out
       const alreadyPaidToMentors = completedPayouts._sum.amountCents ?? 0;
-      const safeToWithdraw = totalPlatformFees;
+      const safeToWithdraw = distributableProfitCents;
 
       // Get mentor breakdown for detailed view
       const mentorBreakdown = wallets
@@ -2514,6 +2566,11 @@ export const postRouter = createTRPCRouter({
         totalAvailableToMentors,
         totalPendingToMentors,
         safeToWithdraw,
+        stripeAvailableCents,
+        tutorLiabilitiesCents,
+        profitReserveCents,
+        distributableProfitCents,
+        ownerPaidTotals,
         
         // Booking stats
         totalBookings,
