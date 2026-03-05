@@ -261,7 +261,7 @@ export const postRouter = createTRPCRouter({
             visible: z.boolean(),
             timeRange: z.string().nullable(),
           })
-        ),
+        ).optional(),
         firstSessionFree: z.boolean().optional(),
       }),
     )
@@ -290,33 +290,37 @@ export const postRouter = createTRPCRouter({
         firstSessionFree,
       } = input;
 
+      const existingUser = await ctx.db.user.findUnique({
+        where: { clerkId: id },
+        include: {
+          availability: true,
+        },
+      });
 
+      if (!existingUser) {
+        throw new Error("Tutor not found");
+      }
 
+      const normalizeCompanies = (companies: string[] | undefined, fallback: string[] = []) => {
+        const source = companies ?? fallback;
+        return Array.from(
+          new Set(
+            source
+              .map((company) => company.trim())
+              .filter(Boolean),
+          ),
+        );
+      };
 
-      const availability2 =  [
-        { day: 'Sunday', available: false, timeRange: '' },
-        { day: 'Monday', available: false, timeRange: '' },
-        { day: 'Tuesday', available: false, timeRange: '' },
-        { day: 'Wednesday', available: false, timeRange: '' },
-        { day: 'Thursday', available: false, timeRange: '' },
-        { day: 'Friday', available: false, timeRange: '' },
-        { day: 'Saturday', available: false, timeRange: '' }
-      ]
+      const nextCareerCompanies =
+        input.careerCompanies !== undefined
+          ? normalizeCompanies(input.careerCompanies)
+          : normalizeCompanies(existingUser.careerCompanies ?? []);
+      const nextCareerIsInternship =
+        input.careerIsInternship ?? existingUser.careerIsInternship ?? true;
 
-      console.log(availability)
-
-
-      // await ctx.db.user.update({
-      //   where: {
-      //     clerkId: id
-      //   },
-      //   data: {
-      //     availability: {
-      //       set: []
-      //     }
-      //   }
-      // })
-     
+      let availabilities: { id: string }[] = [];
+      if (availability !== undefined) {
         await ctx.db.availability.deleteMany({
           where: {
             user: {
@@ -325,7 +329,6 @@ export const postRouter = createTRPCRouter({
           },
         });
 
-      
         await ctx.db.availability.createMany({
           data: availability.map((day) => ({
             userId: id,
@@ -338,12 +341,13 @@ export const postRouter = createTRPCRouter({
           })),
         });
 
-        const availabilities = await ctx.db.availability.findMany({
+        availabilities = await ctx.db.availability.findMany({
           where: { userId: id },
           select: {
             id: true
           }
-        })
+        });
+      }
 
         // Handle course updates if provided
         if (courseIds !== undefined) {
@@ -373,25 +377,38 @@ export const postRouter = createTRPCRouter({
 
         // ============= AUTO-APPROVAL LOGIC =============
         // Check if all required fields are filled to auto-approve the tutor
-        const hasValidImage = !!imageSrc && imageSrc !== '' && !imageSrc.includes('gravatar');
-        const hasUsername = !!username && username !== 'None' && username.trim() !== '';
-        const hasHourlyRate = !!hourlyRate && hourlyRate > 0;
-        const hasBio = !!bio && bio !== 'None' && bio.trim() !== '';
-        const hasDescription = !!description && description !== 'None' && description.trim() !== '';
-        const hasSchool = !!school && school !== 'None' && school.trim() !== '';
-        const hasMajor = !!major && major !== 'None' && major.trim() !== '';
-        const hasGpa = !!gpa && gpa > 0;
-        const hasSubjects = !!subjects && subjects.length > 0;
+        const nextImageSrc = imageSrc ?? existingUser.imageSrc;
+        const nextUsername = username ?? existingUser.username;
+        const nextHourlyRate = hourlyRate ?? existingUser.hourlyRate;
+        const nextBio = bio ?? existingUser.bio;
+        const nextDescription = description ?? existingUser.description;
+        const nextSchool = school ?? existingUser.school;
+        const nextMajor = major ?? existingUser.major;
+        const nextGpa = gpa ?? existingUser.gpa;
+        const nextSubjects = subjects ?? existingUser.subjects;
+        const nextMeetingLink = meetingLink ?? existingUser.meetingLink ?? "";
+        const nextAvailability = availability ?? existingUser.availability;
+
+        const hasValidImage = !!nextImageSrc && nextImageSrc !== '' && !nextImageSrc.includes('gravatar');
+        const hasUsername = !!nextUsername && nextUsername !== 'None' && nextUsername.trim() !== '';
+        const hasHourlyRate = !!nextHourlyRate && nextHourlyRate > 0;
+        const hasBio = !!nextBio && nextBio !== 'None' && nextBio.trim() !== '';
+        const hasDescription = !!nextDescription && nextDescription !== 'None' && nextDescription.trim() !== '';
+        const hasSchool = !!nextSchool && nextSchool !== 'None' && nextSchool.trim() !== '';
+        const hasMajor = !!nextMajor && nextMajor !== 'None' && nextMajor.trim() !== '';
+        const hasGpa = !!nextGpa && nextGpa > 0;
+        const hasSubjects = !!nextSubjects && nextSubjects.length > 0;
         
         // Meeting link is now OPTIONAL for approval
         // If provided, it must be a valid URL (not just text like "Google meets")
-        const meetingLinkProvided = !!meetingLink && meetingLink.trim() !== '';
-        const isValidMeetingLinkUrl = meetingLinkProvided ? isValidUrl(meetingLink) : true;
+        const meetingLinkProvided = !!nextMeetingLink && nextMeetingLink.trim() !== '';
+        const isValidMeetingLinkUrl = meetingLinkProvided ? isValidUrl(nextMeetingLink) : true;
         
         // Check if at least one availability slot has both start and end time
-        const hasValidAvailability = availability.some(
+        const hasValidAvailability = nextAvailability.some(
           (day) => day.available && day.startTime && day.endTime
         );
+        const hasCareerCompanyIfInternship = !nextCareerIsInternship || nextCareerCompanies.length > 0;
 
         // Auto-approve if all required fields are complete
         // Meeting link is optional - if provided it must be valid, if not provided that's OK
@@ -406,7 +423,22 @@ export const postRouter = createTRPCRouter({
           hasGpa &&
           hasSubjects &&
           isValidMeetingLinkUrl && // Only blocks approval if an INVALID link is provided
+          hasCareerCompanyIfInternship &&
           hasValidAvailability;
+
+        const missingRequirements: string[] = [];
+        if (!hasValidImage) missingRequirements.push("profile photo");
+        if (!hasUsername) missingRequirements.push("username");
+        if (!hasHourlyRate) missingRequirements.push("hourly rate");
+        if (!hasBio) missingRequirements.push("bio");
+        if (!hasDescription) missingRequirements.push("about section");
+        if (!hasSchool) missingRequirements.push("school");
+        if (!hasMajor) missingRequirements.push("major");
+        if (!hasGpa) missingRequirements.push("GPA");
+        if (!hasSubjects) missingRequirements.push("subjects");
+        if (!isValidMeetingLinkUrl) missingRequirements.push("valid meeting link URL");
+        if (!hasCareerCompanyIfInternship) missingRequirements.push("at least one internship company");
+        if (!hasValidAvailability) missingRequirements.push("at least one availability slot");
 
         console.log('Auto-approval check:', {
           hasValidImage,
@@ -420,11 +452,12 @@ export const postRouter = createTRPCRouter({
           hasSubjects,
           meetingLinkProvided,
           isValidMeetingLinkUrl,
+          hasCareerCompanyIfInternship,
           hasValidAvailability,
           shouldBeApproved,
         });
       
-      return ctx.db.user.update({
+      const updatedUser = await ctx.db.user.update({
         where: {
           clerkId: id,
         },
@@ -446,17 +479,29 @@ export const postRouter = createTRPCRouter({
           hourlyRate,
           meetingLink,
           timezone,
-          ...(input.careerCompanies !== undefined ? { careerCompanies: input.careerCompanies } : {}),
+          ...(input.careerCompanies !== undefined ? { careerCompanies: nextCareerCompanies } : {}),
           ...(input.careerIsInternship !== undefined ? { careerIsInternship: input.careerIsInternship } : {}),
           ...(input.isTransfer !== undefined ? { isTransfer: input.isTransfer } : {}),
-          availability: {
-            connect: availabilities
-          },
+          ...(availability !== undefined
+            ? {
+                availability: {
+                  connect: availabilities
+                },
+              }
+            : {}),
           ...(firstSessionFree !== undefined ? { firstSessionFree } : {}),
           // Auto-set approved status based on profile completeness
           approved: shouldBeApproved,
         },
       });
+
+      return {
+        user: updatedUser,
+        profileChecks: {
+          approved: shouldBeApproved,
+          missingRequirements,
+        },
+      };
     }),
 
   approveTutor: publicProcedure

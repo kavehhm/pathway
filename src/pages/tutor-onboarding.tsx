@@ -65,7 +65,6 @@ export default function Example() {
     { enabled: school === "Northwestern University" }
   );
   const [major, setMajor] = useState(tutor.data?.major);
-  const [approved, setApproved] = useState(tutor.data?.approved);
   const [description, setDescription] = useState(tutor.data?.description);
 
   const [gpa, setGpa] = useState(tutor.data?.gpa ?? 0.0);
@@ -96,11 +95,11 @@ export default function Example() {
   // const [isSendingCode, setIsSendingCode] = useState<boolean>(false);
   // const [isVerifyingCode, setIsVerifyingCode] = useState<boolean>(false);
 
-  const [editAvailability, setEditAvailability] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [hydrationComplete, setHydrationComplete] = useState(false);
   const initialSnapshotRef = useRef<string | null>(null);
+  const hydratedTutorIdRef = useRef<string | null>(null);
 
   const [availability, setAvailability] = useState<Availability[]>([
     {
@@ -234,43 +233,45 @@ export default function Example() {
   });
 
   useEffect(() => {
-    setBio(tutor.data?.bio);
-    setUsername(tutor.data?.username);
-    setSchool(tutor.data?.school);
-    setMajor(tutor.data?.major);
-    setApproved(tutor.data?.approved);
-    setDescription(tutor.data?.description);
-    setGpa(tutor.data?.gpa as number);
-    setCountry(tutor.data?.country);
-    setState(tutor.data?.state);
-    setZipCode(tutor.data?.zipCode);
-    setTutorInPerson(tutor.data?.tutorInPerson);
-    setSelectedSubjects(tutor.data?.subjects);
-    setMeetingLink(tutor.data?.meetingLink);
-    setFirstSessionFree(!!tutor.data?.firstSessionFree);
+    if (!tutor.isFetchedAfterMount || !tutor.data) return;
+
+    // Hydrate local form state once per tutor record to avoid clobbering in-progress edits
+    // when query refetches occur (e.g., Clerk profile sync).
+    if (hydratedTutorIdRef.current === tutor.data.id) return;
+    hydratedTutorIdRef.current = tutor.data.id;
+
+    setBio(tutor.data.bio);
+    setUsername(tutor.data.username);
+    setSchool(tutor.data.school);
+    setMajor(tutor.data.major);
+    setDescription(tutor.data.description);
+    setGpa(tutor.data.gpa ?? 0);
+    setCountry(tutor.data.country);
+    setState(tutor.data.state);
+    setZipCode(tutor.data.zipCode);
+    setTutorInPerson(tutor.data.tutorInPerson);
+    setSelectedSubjects(tutor.data.subjects);
+    setMeetingLink(tutor.data.meetingLink);
+    setFirstSessionFree(!!tutor.data.firstSessionFree);
     setCareerCompanies((tutor.data as any)?.careerCompanies ?? []);
     setCareerIsInternship((tutor.data as any)?.careerIsInternship ?? true);
     setIsTransfer((tutor.data as any)?.isTransfer ?? false);
-    // Only set timezone if it exists on tutor.data
-    if ('timezone' in (tutor.data ?? {})) {
+
+    if ('timezone' in tutor.data) {
       setTimezone((tutor.data as any)?.timezone ?? 'PST');
     } else {
       setTimezone('PST');
     }
+
     if (
-      tutor.data?.availability &&
-      tutor.data?.availability.length > 0 &&
+      tutor.data.availability &&
+      tutor.data.availability.length > 0 &&
       Array.isArray(tutor.data.availability)
     ) {
       setAvailability(tutor.data.availability);
     }
-    // setEduEmailInput((tutor.data as any)?.eduEmail ?? "");
-    
-    // Mark initial load as complete after data is loaded
-    // (real "ready" signal handled by hydrationComplete below)
-    if (tutor.isFetchedAfterMount && tutor.data) {
-      setIsInitialLoad(false);
-    }
+
+    setIsInitialLoad(false);
   }, [tutor.isFetchedAfterMount, tutor.data]);
 
   // Load tutor's existing courses
@@ -384,11 +385,6 @@ export default function Example() {
     });
   };
   
-
-
-
-  console.log("availabilty", availability);
-
   const makeSnapshot = () => {
     const normalizeString = (v: unknown) => (typeof v === "string" ? v.trim() : "");
     const normalizeStringArray = (arr: unknown) =>
@@ -501,9 +497,21 @@ export default function Example() {
 
   // Main updateUser mutation for the button (no redirect - stays on page)
   const updateUser = api.post.updateTutor.useMutation({
-    onSuccess: async () => {
-      toast.success("Profile updated successfully!");
+    onSuccess: async (result) => {
+      // Saving succeeded, so clear unsaved-change guards immediately.
       setHasUnsavedChanges(false);
+
+      if (result.profileChecks.approved) {
+        toast.success("Profile updated successfully!");
+      } else {
+        const reasons = result.profileChecks.missingRequirements;
+        toast.error(
+          reasons.length > 0
+            ? `Profile saved, but still hidden. Missing: ${reasons.slice(0, 3).join(", ")}${reasons.length > 3 ? "..." : ""}`
+            : "Profile saved, but still hidden until required fields are complete.",
+        );
+      }
+
       // Reset baseline snapshot to the newly-saved values so leaving the page doesn't warn.
       initialSnapshotRef.current = makeSnapshot();
       await tutor.refetch();
@@ -518,7 +526,6 @@ export default function Example() {
   // Separate mutation for auto-sync (no redirect)
   const updateUserProfileFields = api.post.updateTutor.useMutation({
     onSuccess: () => {
-      toast.success("Profile updated!");
       tutor.refetch();
     },
   });
@@ -546,25 +553,6 @@ export default function Example() {
         firstName: clerkFirstName,
         lastName: clerkLastName,
         imageSrc: clerkImageUrl,
-        // Only update these fields, leave others as is
-        bio: tutor.data.bio,
-        username: tutor.data.username,
-        school: tutor.data.school,
-        major: tutor.data.major,
-        description: tutor.data.description,
-        gpa: tutor.data.gpa,
-        hourlyRate: tutor.data.hourlyRate,
-        country: tutor.data.country,
-        state: tutor.data.state,
-        zipCode: tutor.data.zipCode,
-        tutorInPerson: tutor.data.tutorInPerson,
-        subjects: tutor.data.subjects,
-        meetingLink: tutor.data.meetingLink ?? undefined,
-        timezone: tutor.data.timezone,
-        availability: tutor.data.availability,
-        careerCompanies: tutor.data.careerCompanies ?? [],
-        careerIsInternship: tutor.data.careerIsInternship ?? true,
-        isTransfer: tutor.data.isTransfer ?? false,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -607,7 +595,7 @@ export default function Example() {
 
   // Intercept Next.js router navigation for unsaved changes
   useEffect(() => {
-    const handleRouteChange = (url: string) => {
+    const handleRouteChange = (_url: string) => {
       if (hasUnsavedChanges && !window.confirm('You have unsaved changes. Are you sure you want to leave? Your changes will be lost.')) {
         router.events.emit('routeChangeError');
         throw 'Route change aborted by user';
@@ -968,12 +956,12 @@ export default function Example() {
                     selectedValues={seletedSubjects}
                     displayValue="subject"
                     isObject={false}
-                    onRemove={(selectedList, selectedItem) => {
+                    onRemove={(selectedList, _selectedItem) => {
                       // selectedList.push(selectedItem)
 
                       setSelectedSubjects(selectedList);
                     }}
-                    onSelect={(selectedList, selectedItem) => {
+                    onSelect={(selectedList, _selectedItem) => {
                       // selectedList.push(selectedItem)
 
                       setSelectedSubjects(selectedList);
@@ -1836,6 +1824,11 @@ export default function Example() {
               className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-indigo-500 to-indigo-600 px-8 py-3 text-sm font-semibold text-white shadow-lg hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 transform hover:scale-105"
               disabled={!user.user?.id}
               onClick={() => {
+                if (careerIsInternship && careerCompanies.length === 0) {
+                  toast.error("Please add at least one company when internship experience is enabled.");
+                  return;
+                }
+
                 updateUser.mutate({
                   id: user.user!.id,
                   bio,
