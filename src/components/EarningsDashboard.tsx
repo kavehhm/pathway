@@ -16,19 +16,19 @@ const EarningsDashboard: React.FC<EarningsDashboardProps> = ({ onWithdrawComplet
 
   // Get wallet data
   const { data: walletData, isLoading: walletLoading, refetch: refetchWallet } = 
-    api.post.getMentorWallet.useQuery(user?.id ?? '', {
+    api.post.getMentorWallet.useQuery(undefined, {
       enabled: !!user?.id,
     });
 
   // Get Stripe status
   const { data: stripeStatus, refetch: refetchStripeStatus } = 
-    api.post.getMentorStripeStatus.useQuery(user?.id ?? '', {
+    api.post.getMentorStripeStatus.useQuery(undefined, {
       enabled: !!user?.id,
     });
 
   // Get payout history
   const { data: payoutHistory, refetch: refetchPayouts } = 
-    api.post.getPayoutHistory.useQuery(user?.id ?? '', {
+    api.post.getPayoutHistory.useQuery(undefined, {
       enabled: !!user?.id,
     });
 
@@ -87,7 +87,6 @@ const EarningsDashboard: React.FC<EarningsDashboardProps> = ({ onWithdrawComplet
         // Try to process the pending payout
         processPendingMutation.mutate({
           payoutId,
-          mentorClerkId: user?.id ?? '',
         });
       }
       
@@ -106,7 +105,6 @@ const EarningsDashboard: React.FC<EarningsDashboardProps> = ({ onWithdrawComplet
     
     setIsWithdrawing(true);
     withdrawMutation.mutate({
-      mentorClerkId: user.id,
       amountCents: amount,
     });
   };
@@ -229,7 +227,7 @@ const EarningsDashboard: React.FC<EarningsDashboardProps> = ({ onWithdrawComplet
           </div>
           {!stripeStatus?.payoutsEnabled && (
             <button
-              onClick={() => user?.id && getOnboardingLinkMutation.mutate(user.id)}
+              onClick={() => getOnboardingLinkMutation.mutate()}
               className="mt-4 w-full bg-white/20 hover:bg-white/30 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors"
             >
               Complete Verification
@@ -370,9 +368,8 @@ const EarningsDashboard: React.FC<EarningsDashboardProps> = ({ onWithdrawComplet
                   </span>
                   {payout.status === 'REQUIRES_ONBOARDING' && (
                     <button
-                      onClick={() => user?.id && processPendingMutation.mutate({
+                      onClick={() => processPendingMutation.mutate({
                         payoutId: payout.id,
-                        mentorClerkId: user.id,
                       })}
                       className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
                     >

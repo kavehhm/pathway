@@ -10,6 +10,7 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { getAuth } from '@clerk/nextjs/server';
 import { sendEmail } from '~/lib/email';
 import {
   tutorBookingConfirmationEmail,
@@ -62,7 +63,30 @@ export default async function handler(
   }
 
   try {
+    const { userId } = getAuth(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
     const { type, params, bookingId, tutorTimezone } = req.body as SendBookingEmailRequest;
+
+    if (!bookingId) {
+      return res.status(400).json({ success: false, error: 'bookingId is required' });
+    }
+
+    const booking = await db.booking.findUnique({
+      where: { id: bookingId },
+      select: { tutorId: true, studentClerkId: true },
+    });
+
+    if (!booking) {
+      return res.status(404).json({ success: false, error: 'Booking not found' });
+    }
+
+    const canAccess = booking.tutorId === userId || booking.studentClerkId === userId;
+    if (!canAccess) {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
 
     if (!type || !params) {
       return res.status(400).json({ success: false, error: 'Missing type or params' });

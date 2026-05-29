@@ -8,6 +8,8 @@
  */
 import { initTRPC } from "@trpc/server";
 import { type CreateNextContextOptions } from "@trpc/server/adapters/next";
+import { getAuth } from "@clerk/nextjs/server";
+import { TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
 
@@ -46,7 +48,11 @@ const createInnerTRPCContext = (_opts: CreateContextOptions) => {
  * @see https://trpc.io/docs/context
  */
 export const createTRPCContext = (_opts: CreateNextContextOptions) => {
-  return createInnerTRPCContext({});
+  const auth = getAuth(_opts.req);
+  return {
+    ...createInnerTRPCContext({}),
+    auth,
+  };
 };
 
 /**
@@ -93,3 +99,19 @@ export const createTRPCRouter = t.router;
  * are logged in.
  */
 export const publicProcedure = t.procedure;
+
+export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+  if (!ctx.auth?.userId) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+
+  return next({
+    ctx: {
+      ...ctx,
+      auth: {
+        ...ctx.auth,
+        userId: ctx.auth.userId,
+      },
+    },
+  });
+});

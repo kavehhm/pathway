@@ -32,7 +32,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Error occured -- no svix headers' })
   }
  
-  console.log('headers', req.headers, svix_id, svix_signature, svix_timestamp)
   // Get the body
   const body = (await buffer(req)).toString()
  
@@ -70,8 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   }
  
-  console.log(`Webhook with and ID of ${id} and type of ${eventType}`)
-  console.log('Webhook body:', body)
+  console.log(`Webhook received with ID ${id} and type ${eventType}`)
  
   return res.status(200).json({ response: 'Success' })
 }

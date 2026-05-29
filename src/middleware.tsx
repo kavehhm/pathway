@@ -1,18 +1,22 @@
 import { authMiddleware } from "@clerk/nextjs";
- 
+
 export default authMiddleware({
   publicRoutes: [
-    "/api/trpc(.*)",
     "/",
-    "/tutors",
     "/tutors(.*)",
+    "/mentors(.*)",
     "/user",
-    "/mentors",
     "/sign-in(.*)",
     "/sign-up(.*)",
     "/sso-callback(.*)",
-    "/api/trpc/post.getAllApprovedTutors,post.getAllSchools,post.getAllMajors,post.getAllSubjects",
+
+    // Public read endpoints
+    "/api/trpc/post.getAllApprovedTutors",
+    "/api/trpc/post.getAllSchools",
+    "/api/trpc/post.getAllMajors",
+    "/api/trpc/post.getAllSubjects",
   ],
+
   // ignoredRoutes completely bypass Clerk middleware - use for health checks, webhooks, etc.
   ignoredRoutes: [
     "/api/health",
@@ -22,7 +26,7 @@ export default authMiddleware({
     "/api/test-calendar",
   ],
 });
- 
+
 export const config = {
-  matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
+  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
 };

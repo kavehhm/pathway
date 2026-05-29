@@ -2,8 +2,9 @@ import { z } from "zod";
 import Stripe from "stripe";
 import { promises as fs } from "fs";
 import path from "path";
+import { TRPCError } from "@trpc/server";
 
-import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, publicProcedure, protectedProcedure } from "~/server/api/trpc";
 import { getSchoolPrestigeRank } from "~/schoolPrestige";
 import { isValidUrl } from "~/lib/validateUrl";
 import { releasePendingEarnings } from "~/lib/releasePendingEarnings";
@@ -22,6 +23,24 @@ const NO_PLATFORM_FEE_TUTOR_IDS = new Set([
   "877215c3-79b9-4254-9dc7-56f450c1227b",
   "user_2ZgVzd9II7Y4rhGnAlq3hvgavGn",
 ]);
+
+const getAdminIds = () =>
+  (process.env.ADMIN_CLERK_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+const assertSelf = (authedUserId: string, claimedClerkId: string) => {
+  if (authedUserId !== claimedClerkId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized for this user" });
+  }
+};
+
+const assertAdmin = (authedUserId: string) => {
+  if (!getAdminIds().includes(authedUserId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+  }
+};
 
 let cachedCompanies: string[] | null = null;
 let cachedCompaniesMtimeMs: number | null = null;
@@ -59,7 +78,8 @@ async function getCompaniesFromCsv() {
 }
 
 export const postRouter = createTRPCRouter({
-  getAllConsoleTutors: publicProcedure.query(({ ctx }) => {
+  getAllConsoleTutors: protectedProcedure.query(({ ctx }) => {
+    assertAdmin(ctx.auth.userId);
     return ctx.db.user.findMany();
   }),
   
@@ -191,7 +211,7 @@ export const postRouter = createTRPCRouter({
     });
   }),
 
-  createTutor: publicProcedure
+  createTutor: protectedProcedure
     .input(
       z.object({
         id: z.string(),
@@ -203,28 +223,7 @@ export const postRouter = createTRPCRouter({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, firstName, lastName, imageSrc, email } = input;
-
-      const apiUrl = "https://api.clerk.com/v2/event-types"
-      const apiKey = "cal_live_e6043df9d987d87182a3e6384cb2116a"
-      const payload = {
-        title: "testtutor",
-        slug: "tutornameslug",
-        lengthInMinutes: 60,
-        description: "testdescription"
-      }
-
-      // const response = await fetch(apiUrl, {
-      //   method: "POST",
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //     "Authorization": `Bearer ${apiKey}`,
-      //     'cal-api-version': '2024-06-14'
-      //   },
-      //   body: JSON.stringify(payload)
-      // })
-
-      // const data = await response.json()
-      // console.log(data)
+      assertSelf(ctx.auth.userId, id);
 
       return ctx.db.user.create({
         data: {
@@ -237,7 +236,7 @@ export const postRouter = createTRPCRouter({
       });
     }),
 
-  updateTutor: publicProcedure
+  updateTutor: protectedProcedure
     .input(
       z.object({
         id: z.string(),
@@ -299,6 +298,7 @@ export const postRouter = createTRPCRouter({
         availability,
         firstSessionFree,
       } = input;
+      assertSelf(ctx.auth.userId, id);
 
       const existingUser = await ctx.db.user.findUnique({
         where: { clerkId: id },
@@ -514,9 +514,10 @@ export const postRouter = createTRPCRouter({
       };
     }),
 
-  approveTutor: publicProcedure
+  approveTutor: protectedProcedure
     .input(z.string())
     .mutation(async ({ input, ctx }) => {
+      assertAdmin(ctx.auth.userId);
       return ctx.db.user.update({
         where: {
           clerkId: input,
@@ -634,7 +635,7 @@ export const postRouter = createTRPCRouter({
     }),
 
   // .edu email verification
-  eduStartVerification: publicProcedure
+  eduStartVerification: protectedProcedure
     .input(
       z.object({
         tutorId: z.string(), // clerkId
@@ -643,6 +644,7 @@ export const postRouter = createTRPCRouter({
     )
     .mutation(async ({ input, ctx }) => {
       const { tutorId, eduEmail } = input;
+      assertSelf(ctx.auth.userId, tutorId);
 
       const normalizedEmail = eduEmail.trim().toLowerCase();
       if (!normalizedEmail.endsWith('.edu')) {
@@ -666,7 +668,7 @@ export const postRouter = createTRPCRouter({
       return { code, expiresAt };
     }),
 
-  eduResendVerification: publicProcedure
+  eduResendVerification: protectedProcedure
     .input(
       z.object({
         tutorId: z.string(),
@@ -674,6 +676,7 @@ export const postRouter = createTRPCRouter({
     )
     .mutation(async ({ input, ctx }) => {
       const { tutorId } = input;
+      assertSelf(ctx.auth.userId, tutorId);
       const user = (await ctx.db.user.findUnique({
         where: { clerkId: tutorId },
         select: ({ eduEmail: true } as any),
@@ -700,7 +703,7 @@ export const postRouter = createTRPCRouter({
       return { code, expiresAt, eduEmail: user.eduEmail };
     }),
 
-  eduVerifyCode: publicProcedure
+  eduVerifyCode: protectedProcedure
     .input(
       z.object({
         tutorId: z.string(),
@@ -709,6 +712,7 @@ export const postRouter = createTRPCRouter({
     )
     .mutation(async ({ input, ctx }) => {
       const { tutorId, code } = input;
+      assertSelf(ctx.auth.userId, tutorId);
       const user = (await ctx.db.user.findUnique({
         where: { clerkId: tutorId },
         select: ({
@@ -895,6 +899,20 @@ export const postRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
       const { tutorId, studentClerkId, studentEmail, studentName, date, time, status, free } = input;
 
+      // Paid bookings can be guest checkout. Free sessions require an authenticated student identity.
+      if (free) {
+        if (!ctx.auth?.userId || !studentClerkId) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Sign-in is required for free sessions",
+          });
+        }
+        assertSelf(ctx.auth.userId, studentClerkId);
+      } else if (studentClerkId && ctx.auth?.userId) {
+        // If a logged-in identity is provided, it must match.
+        assertSelf(ctx.auth.userId, studentClerkId);
+      }
+
       // Convert date string to DateTime (normalized to midnight UTC to match unique composite)
       const bookingDate = new Date(date);
       const normalizedDate = new Date(bookingDate.toISOString().split('T')[0] ?? date);
@@ -976,7 +994,7 @@ export const postRouter = createTRPCRouter({
       }
     }),
 
-  createStripeConnectAccount: publicProcedure
+  createStripeConnectAccount: protectedProcedure
     .input(
       z.object({
         tutorId: z.string(),
@@ -987,6 +1005,7 @@ export const postRouter = createTRPCRouter({
     )
     .mutation(async ({ input, ctx }) => {
       const { tutorId, email, firstName, lastName } = input;
+      assertSelf(ctx.auth.userId, tutorId);
 
       try {
         // Check if tutor already has a Stripe account
@@ -1161,6 +1180,9 @@ export const postRouter = createTRPCRouter({
     )
     .mutation(async ({ input, ctx }) => {
       const { tutorId, studentClerkId, date, time, paymentIntentId, studentName, studentEmail } = input;
+      if (studentClerkId && ctx.auth?.userId) {
+        assertSelf(ctx.auth.userId, studentClerkId);
+      }
 
       console.log(`Booking session for tutor ${tutorId} on ${date} at ${time}`);
       
@@ -1320,7 +1342,7 @@ export const postRouter = createTRPCRouter({
   }),
 
   // Add courses to a tutor's profile
-  addTutorCourses: publicProcedure
+  addTutorCourses: protectedProcedure
     .input(
       z.object({
         userId: z.string(), // clerkId
@@ -1328,6 +1350,7 @@ export const postRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertSelf(ctx.auth.userId, input.userId);
       // First, get the user's actual UUID from their clerkId
       const user = await ctx.db.user.findUnique({
         where: { clerkId: input.userId },
@@ -1378,7 +1401,7 @@ export const postRouter = createTRPCRouter({
   // ============= REVIEW PROCEDURES =============
 
   // Create or update a review
-  createReview: publicProcedure
+  createReview: protectedProcedure
     .input(
       z.object({
         bookingId: z.string(),
@@ -1389,6 +1412,7 @@ export const postRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertSelf(ctx.auth.userId, input.studentClerkId);
       // Check if booking exists and is completed and paid
       const booking = await ctx.db.booking.findUnique({
         where: { id: input.bookingId },
@@ -1465,7 +1489,7 @@ export const postRouter = createTRPCRouter({
     }),
 
   // Update review text
-  updateReview: publicProcedure
+  updateReview: protectedProcedure
     .input(
       z.object({
         reviewId: z.string(),
@@ -1474,6 +1498,13 @@ export const postRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.review.findUnique({
+        where: { id: input.reviewId },
+        select: { studentClerkId: true },
+      });
+      if (!existing || existing.studentClerkId !== ctx.auth.userId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized to edit this review" });
+      }
       return ctx.db.review.update({
         where: { id: input.reviewId },
         data: {
@@ -1484,7 +1515,7 @@ export const postRouter = createTRPCRouter({
     }),
 
   // Add tutor response to review
-  addTutorResponse: publicProcedure
+  addTutorResponse: protectedProcedure
     .input(
       z.object({
         reviewId: z.string(),
@@ -1492,6 +1523,13 @@ export const postRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.review.findUnique({
+        where: { id: input.reviewId },
+        select: { tutorClerkId: true },
+      });
+      if (!existing || existing.tutorClerkId !== ctx.auth.userId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized to respond to this review" });
+      }
       return ctx.db.review.update({
         where: { id: input.reviewId },
         data: {
@@ -1549,9 +1587,10 @@ export const postRouter = createTRPCRouter({
     }),
 
   // Get student's completed bookings that can be reviewed
-  getReviewableBookings: publicProcedure
+  getReviewableBookings: protectedProcedure
     .input(z.string()) // studentClerkId
     .query(async ({ ctx, input }) => {
+      assertSelf(ctx.auth.userId, input);
       const bookings = await ctx.db.booking.findMany({
         where: {
           studentClerkId: input,
@@ -1619,9 +1658,10 @@ export const postRouter = createTRPCRouter({
       });
     }),
 
-  getTutorBookings: publicProcedure
+  getTutorBookings: protectedProcedure
     .input(z.string()) // tutorClerkId
     .query(async ({ ctx, input }) => {
+      assertSelf(ctx.auth.userId, input);
       const bookings = await ctx.db.booking.findMany({
         where: {
           tutorId: input,
@@ -1667,10 +1707,9 @@ export const postRouter = createTRPCRouter({
   // ============= MENTOR WALLET & EARNINGS SYSTEM =============
 
   // Get mentor's wallet balance and recent ledger entries
-  getMentorWallet: publicProcedure
-    .input(z.string()) // mentorClerkId
-    .query(async ({ ctx, input }) => {
-      const mentorId = input;
+  getMentorWallet: protectedProcedure
+    .query(async ({ ctx }) => {
+      const mentorId = ctx.auth.userId;
 
       // Release any matured pending earnings before returning wallet data
       await releasePendingEarnings(mentorId);
@@ -1734,9 +1773,10 @@ export const postRouter = createTRPCRouter({
     }),
 
   // Get completed sessions that haven't had earnings processed yet
-  getUnprocessedEarnings: publicProcedure
+  getUnprocessedEarnings: protectedProcedure
     .input(z.string()) // mentorClerkId
     .query(async ({ ctx, input }) => {
+      assertSelf(ctx.auth.userId, input);
       return ctx.db.booking.findMany({
         where: {
           tutorId: input,
@@ -1751,7 +1791,7 @@ export const postRouter = createTRPCRouter({
 
   // Mark a session as completed and add earnings to mentor's wallet
   // This would be called when a session is marked as completed
-  completeSessionAndAddEarnings: publicProcedure
+  completeSessionAndAddEarnings: protectedProcedure
     .input(
       z.object({
         bookingId: z.string(),
@@ -1760,6 +1800,7 @@ export const postRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const { bookingId, mentorClerkId } = input;
+      assertSelf(ctx.auth.userId, mentorClerkId);
 
       // Get booking
       const booking = await ctx.db.booking.findUnique({
@@ -1839,15 +1880,15 @@ export const postRouter = createTRPCRouter({
     }),
 
   // Request a withdrawal - creates Stripe Connect account if needed
-  withdrawEarnings: publicProcedure
+  withdrawEarnings: protectedProcedure
     .input(
       z.object({
-        mentorClerkId: z.string(),
         amountCents: z.number().optional(), // If not provided, withdraw all available
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { mentorClerkId, amountCents: requestedAmount } = input;
+      const { amountCents: requestedAmount } = input;
+      const mentorClerkId = ctx.auth.userId;
 
       // Release any matured pending earnings before checking balance
       await releasePendingEarnings(mentorClerkId);
@@ -2141,15 +2182,15 @@ export const postRouter = createTRPCRouter({
     }),
 
   // Process pending payout after onboarding is complete
-  processPendingPayout: publicProcedure
+  processPendingPayout: protectedProcedure
     .input(
       z.object({
         payoutId: z.string(),
-        mentorClerkId: z.string(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { payoutId, mentorClerkId } = input;
+      const { payoutId } = input;
+      const mentorClerkId = ctx.auth.userId;
 
       // Get payout
       const payout = await ctx.db.mentorPayout.findUnique({
@@ -2280,10 +2321,9 @@ export const postRouter = createTRPCRouter({
     }),
 
   // Get Stripe onboarding link (for continuing incomplete onboarding)
-  getStripeOnboardingLink: publicProcedure
-    .input(z.string()) // mentorClerkId
-    .mutation(async ({ ctx, input }) => {
-      const mentorClerkId = input;
+  getStripeOnboardingLink: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const mentorClerkId = ctx.auth.userId;
 
       const mentor = await ctx.db.user.findUnique({
         where: { clerkId: mentorClerkId },
@@ -2350,11 +2390,11 @@ export const postRouter = createTRPCRouter({
     }),
 
   // Get mentor's Stripe account status
-  getMentorStripeStatus: publicProcedure
-    .input(z.string()) // mentorClerkId
-    .query(async ({ ctx, input }) => {
+  getMentorStripeStatus: protectedProcedure
+    .query(async ({ ctx }) => {
+      const mentorClerkId = ctx.auth.userId;
       const mentor = await ctx.db.user.findUnique({
-        where: { clerkId: input },
+        where: { clerkId: mentorClerkId },
         select: {
           stripeAccountId: true,
           stripeChargesEnabled: true,
@@ -2377,7 +2417,7 @@ export const postRouter = createTRPCRouter({
 
       // Update DB
       await ctx.db.user.update({
-        where: { clerkId: input },
+        where: { clerkId: mentorClerkId },
         data: {
           stripeChargesEnabled: account.charges_enabled,
           stripePayoutsEnabled: account.payouts_enabled,
@@ -2395,11 +2435,11 @@ export const postRouter = createTRPCRouter({
     }),
 
   // Get mentor's payout history
-  getPayoutHistory: publicProcedure
-    .input(z.string()) // mentorClerkId
-    .query(async ({ ctx, input }) => {
+  getPayoutHistory: protectedProcedure
+    .query(async ({ ctx }) => {
+      const mentorClerkId = ctx.auth.userId;
       return ctx.db.mentorPayout.findMany({
-        where: { mentorId: input },
+        where: { mentorId: mentorClerkId },
         orderBy: { createdAt: 'desc' },
         take: 50,
       });
@@ -2408,14 +2448,11 @@ export const postRouter = createTRPCRouter({
   // ============= ADMIN DASHBOARD =============
 
   // Get admin dashboard stats
-  getAdminDashboardStats: publicProcedure
+  getAdminDashboardStats: protectedProcedure
     .input(z.string()) // adminClerkId for authorization
     .query(async ({ ctx, input }) => {
-      // Check if user is an admin
-      const adminIds = (process.env.ADMIN_CLERK_IDS ?? '').split(',').map(id => id.trim());
-      if (!adminIds.includes(input)) {
-        throw new Error('Unauthorized: Admin access required');
-      }
+      assertSelf(ctx.auth.userId, input);
+      assertAdmin(ctx.auth.userId);
 
       // Get all mentor wallets - money owed to mentors
       const wallets = await ctx.db.mentorWallet.findMany({
