@@ -8,37 +8,8 @@ import {
 } from '@stripe/react-stripe-js';
 import { api } from '~/utils/api';
 import { toast } from 'react-hot-toast';
-import { getCurrentTimezone, convertTimeBetweenTimezones } from '~/utils/timezones';
+import { getCurrentTimezone, convertAppointmentBetweenTimezones } from '~/utils/timezones';
 import { useUser } from '@clerk/nextjs';
-
-// Robust helpers to avoid non-ISO Date parsing issues on mobile browsers
-function parse12HourTimeToMinutes(timeStr: string): number | null {
-  // Expected formats like "9:00 AM" or "12:30 PM"
-  if (!timeStr || typeof timeStr !== 'string') return null;
-  const trimmed = timeStr.trim();
-  const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!match) return null;
-  const hours = parseInt(match[1] ?? '0', 10);
-  const minutes = parseInt(match[2] ?? '0', 10);
-  const period = (match[3] ?? 'AM').toUpperCase();
-  if (Number.isNaN(hours) || Number.isNaN(minutes) || hours < 1 || hours > 12 || minutes < 0 || minutes > 59) {
-    return null;
-  }
-  let hour24 = hours % 12;
-  if (period === 'PM') hour24 += 12;
-  return hour24 * 60 + minutes;
-}
-
-function formatMinutesTo12Hour(totalMinutes: number): string {
-  const minutesNormalized = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
-  let hours24 = Math.floor(minutesNormalized / 60);
-  const minutes = minutesNormalized % 60;
-  const period = hours24 >= 12 ? 'PM' : 'AM';
-  if (hours24 === 0) hours24 = 12; // 0 -> 12 AM
-  if (hours24 > 12) hours24 -= 12; // 13-23 -> 1-11 PM
-  const minutesStr = minutes.toString().padStart(2, '0');
-  return `${hours24}:${minutesStr} ${period}`;
-}
 
 // Load Stripe outside of component to avoid recreating on every render
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -85,7 +56,8 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
       // Paid session - create booking (with tutor timezone to prevent duplicates)
       const tutorTimezone = tutor.data?.timezone ?? 'PST';
       const studentTimezone = getCurrentTimezone();
-      const timeInTutorTimezone = convertTimeBetweenTimezones(
+      const tutorSlot = convertAppointmentBetweenTimezones(
+        date,
         time,
         studentTimezone,
         tutorTimezone
@@ -93,8 +65,8 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
       result = await bookSession.mutateAsync({
         tutorId,
         studentClerkId: user?.id,
-        date,
-        time: timeInTutorTimezone,
+        date: tutorSlot.date,
+        time: tutorSlot.time,
         paymentIntentId: paymentIntent.id,
         studentName,
         studentEmail,
@@ -133,53 +105,7 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({
       }
     }
 
-    // Send confirmation emails + create Google Calendar event via the same
-    // server endpoint that free sessions use.  This avoids the race condition
-    // where the Stripe webhook fires before the booking exists in the DB.
-    if (tutor.data && paymentIntent) {
-      const studentTimezone = getCurrentTimezone();
-      const tutorTz = tutor.data.timezone ?? 'PST';
-
-      const tutorStartTime = convertTimeBetweenTimezones(time, studentTimezone, tutorTz);
-      const tutorStartMinutes = parse12HourTimeToMinutes(tutorStartTime);
-      const tutorEndTime = tutorStartMinutes !== null
-        ? formatMinutesTo12Hour(tutorStartMinutes + 60)
-        : tutorStartTime;
-
-      const dateStr = date;
-
-      fetch('/api/send-booking-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'both',
-          bookingId,
-          tutorTimezone: tutor.data.timezone ?? 'America/Los_Angeles',
-          params: {
-            tutorName: `${tutor.data.firstName} ${tutor.data.lastName}`,
-            studentName,
-            date: dateStr,
-            startTime: tutorStartTime,
-            endTime: tutorEndTime,
-            timeZone: tutorTz,
-            studentEmail,
-            tutorEmail: tutor.data.email,
-            meetingLink: tutor.data.meetingLink ?? '',
-          },
-        }),
-      })
-        .then((r) => r.json())
-        .then((result: any) => {
-          if (result.success) {
-            console.log('Paid session confirmation emails sent successfully');
-          } else {
-            console.error('Failed to send some paid session emails:', result);
-          }
-        })
-        .catch((error) => {
-          console.error('Error sending paid session booking emails:', error);
-        });
-    }
+    // Paid-session scheduling + confirmation emails are handled server-side in bookSession.
 
     toast.success('Session booked successfully!');
     onSuccess(bookingId);

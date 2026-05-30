@@ -9,6 +9,15 @@ import { getSchoolPrestigeRank } from "~/schoolPrestige";
 import { isValidUrl } from "~/lib/validateUrl";
 import { releasePendingEarnings } from "~/lib/releasePendingEarnings";
 import { distributePlatformProfit } from "~/lib/platformProfitDistribution";
+import { createBookingEventLog } from "~/lib/bookingEventLog";
+import {
+  createMeetEvent,
+  formatBookingForCalendar,
+  parseBookingDateTime,
+  type CalendarEventDetails,
+} from "~/lib/googleCalendar";
+import { calculateEndTime, sendBookingConfirmationEmails } from "~/lib/sendBookingEmails";
+import { issueTutorCancelToken } from "~/lib/bookingActions";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
@@ -1191,6 +1200,14 @@ export const postRouter = createTRPCRouter({
         const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
         
         if (paymentIntent.status !== 'succeeded') {
+          await createBookingEventLog(ctx.db, {
+            eventType: "PAYMENT_VERIFY_FAILED",
+            message: "PaymentIntent status was not succeeded during bookSession",
+            tutorId,
+            studentEmail,
+            stripePaymentIntentId: paymentIntentId,
+            metadata: { paymentStatus: paymentIntent.status },
+          });
           throw new Error('Payment not completed');
         }
 
@@ -1198,6 +1215,16 @@ export const postRouter = createTRPCRouter({
         const totalAmount = paymentIntent.amount;
         const platformFee = parseInt(paymentIntent.metadata.platformFee ?? '0', 10);
         const tutorAmount = parseInt(paymentIntent.metadata.tutorAmount ?? '0', 10);
+        await createBookingEventLog(ctx.db, {
+          eventType: "PAYMENT_VERIFIED",
+          message: "Payment verified for paid booking",
+          tutorId,
+          studentEmail,
+          totalAmountCents: totalAmount,
+          platformFeeCents: platformFee,
+          mentorEarningsCents: tutorAmount,
+          stripePaymentIntentId: paymentIntentId,
+        });
 
         // Normalize date and guard against duplicates
         const bookingDate = new Date(date);
@@ -1280,6 +1307,18 @@ export const postRouter = createTRPCRouter({
         });
 
         console.log('Booking created with payment info and wallet credited:', result.id);
+        await createBookingEventLog(ctx.db, {
+          bookingId: result.id,
+          eventType: "BOOKING_CREATED",
+          message: "Booking created and earnings credited",
+          tutorId,
+          tutorEmail: tutorData?.email ?? undefined,
+          studentEmail,
+          totalAmountCents: totalAmount,
+          platformFeeCents: platformFee,
+          mentorEarningsCents: tutorAmount,
+          stripePaymentIntentId: paymentIntentId,
+        });
 
         // Best-effort owner profit distribution:
         // only transfers true excess funds after tutor liabilities + reserve are covered.
@@ -1299,6 +1338,128 @@ export const postRouter = createTRPCRouter({
           select: { firstName: true, lastName: true, email: true, meetingLink: true, timezone: true }
         });
 
+        // Primary scheduling + notification path lives here (not webhook-dependent).
+        if (tutor) {
+          try {
+            const tutorName = `${tutor.firstName} ${tutor.lastName}`.trim();
+            const tutorTimezone = tutor.timezone ?? "America/Los_Angeles";
+            const bookingDateIso = normalizedDate.toISOString().split("T")[0] ?? date;
+            const bookingDateDisplay = normalizedDate.toLocaleDateString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              timeZone: "UTC",
+            });
+
+            let meetingLink = tutor.meetingLink ?? "";
+            let calendarLink: string | null = null;
+            let calendarEventId: string | null = null;
+
+            if (!isValidUrl(meetingLink)) {
+              const { startTime, endTime } = parseBookingDateTime(bookingDateIso, time, tutorTimezone);
+              const { summary, description } = formatBookingForCalendar(tutorName, studentName);
+              const eventDetails: CalendarEventDetails = {
+                summary,
+                description,
+                startTime,
+                endTime,
+                timezone: tutorTimezone,
+                tutorEmail: tutor.email,
+                studentEmail,
+                tutorName,
+                studentName,
+              };
+
+              const calendarResult = await createMeetEvent(eventDetails);
+              meetingLink = calendarResult.meetLink;
+              calendarLink = calendarResult.htmlLink || null;
+              calendarEventId = calendarResult.eventId || null;
+              await createBookingEventLog(ctx.db, {
+                bookingId: result.id,
+                eventType: "CALENDAR_CREATED",
+                message: "Google Calendar event created for booking",
+                tutorId,
+                tutorEmail: tutor.email,
+                studentEmail,
+                totalAmountCents: totalAmount,
+                platformFeeCents: platformFee,
+                mentorEarningsCents: tutorAmount,
+                stripePaymentIntentId: paymentIntentId,
+                metadata: {
+                  calendarEventId,
+                  calendarHtmlLink: calendarLink,
+                },
+              });
+            }
+
+            let tutorCancelUrl: string | null = null;
+            try {
+              const tokenResult = await issueTutorCancelToken(result.id);
+              tutorCancelUrl = tokenResult.cancelUrl;
+            } catch (tokenError) {
+              console.error(`Failed to issue tutor cancel token for booking ${result.id}:`, tokenError);
+            }
+
+            await sendBookingConfirmationEmails({
+              tutorName,
+              studentName,
+              tutorEmail: tutor.email,
+              studentEmail,
+              date: bookingDateDisplay,
+              startTime: time,
+              endTime: calculateEndTime(time),
+              tutorTimezone,
+              studentTimezone: tutorTimezone,
+              meetingLink: meetingLink || null,
+              calendarLink,
+              tutorCancelUrl,
+            });
+            await createBookingEventLog(ctx.db, {
+              bookingId: result.id,
+              eventType: "EMAILS_SENT",
+              message: "Booking confirmation emails sent from bookSession",
+              tutorId,
+              tutorEmail: tutor.email,
+              studentEmail,
+              totalAmountCents: totalAmount,
+              platformFeeCents: platformFee,
+              mentorEarningsCents: tutorAmount,
+              stripePaymentIntentId: paymentIntentId,
+            });
+
+            await ctx.db.booking.update({
+              where: { id: result.id },
+              data: {
+                tutorEmail: tutor.email,
+                studentEmail,
+                studentName,
+                meetLink: meetingLink || null,
+                calendarEventId,
+                calendarHtmlLink: calendarLink,
+              },
+            });
+          } catch (schedulingError) {
+            // Booking/payment already succeeded; keep user flow successful and rely on webhook fallback + logs.
+            console.error(`Failed scheduling/notifications for booking ${result.id}:`, schedulingError);
+            await createBookingEventLog(ctx.db, {
+              bookingId: result.id,
+              eventType: "CALENDAR_FAILED",
+              message: "Scheduling/notification step failed in bookSession",
+              tutorId,
+              tutorEmail: tutor.email,
+              studentEmail,
+              totalAmountCents: totalAmount,
+              platformFeeCents: platformFee,
+              mentorEarningsCents: tutorAmount,
+              stripePaymentIntentId: paymentIntentId,
+              metadata: {
+                error: schedulingError instanceof Error ? schedulingError.message : String(schedulingError),
+              },
+            });
+          }
+        }
+
         return { 
           success: true, 
           message: 'Session booked successfully', 
@@ -1312,6 +1473,16 @@ export const postRouter = createTRPCRouter({
         };
       } catch (error) {
         console.error('Error creating booking:', error);
+        await createBookingEventLog(ctx.db, {
+          eventType: "PAYMENT_VERIFY_FAILED",
+          message: "bookSession failed before completion",
+          tutorId,
+          studentEmail,
+          stripePaymentIntentId: paymentIntentId,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
         throw new Error('Failed to create booking');
       }
     }),
@@ -2597,6 +2768,11 @@ export const postRouter = createTRPCRouter({
         take: 10,
       });
 
+      const bookingEventLogs = await ctx.db.bookingEventLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      });
+
       return {
         // Summary stats
         totalOwedToMentors,
@@ -2634,6 +2810,20 @@ export const postRouter = createTRPCRouter({
           mentorEarnings: b.mentorEarningsCents,
           earningsProcessed: b.earningsProcessed,
           createdAt: b.createdAt,
+        })),
+        bookingEventLogs: bookingEventLogs.map((log) => ({
+          id: log.id,
+          bookingId: log.bookingId,
+          createdAt: log.createdAt,
+          eventType: log.eventType,
+          message: log.message,
+          tutorId: log.tutorId,
+          tutorEmail: log.tutorEmail,
+          studentEmail: log.studentEmail,
+          totalAmountCents: log.totalAmountCents,
+          platformFeeCents: log.platformFeeCents,
+          mentorEarningsCents: log.mentorEarningsCents,
+          stripePaymentIntentId: log.stripePaymentIntentId,
         })),
       };
     }),

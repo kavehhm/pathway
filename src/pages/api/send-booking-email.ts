@@ -26,6 +26,7 @@ import {
 import { isValidUrl } from '~/lib/validateUrl';
 import { db } from '~/server/db';
 import { issueTutorCancelToken } from '~/lib/bookingActions';
+import { calculateEndTime } from '~/lib/sendBookingEmails';
 
 interface SendBookingEmailRequest {
   type: 'tutor' | 'student' | 'both';
@@ -76,7 +77,16 @@ export default async function handler(
 
     const booking = await db.booking.findUnique({
       where: { id: bookingId },
-      select: { tutorId: true, studentClerkId: true },
+      include: {
+        tutor: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+            timezone: true,
+          },
+        },
+      },
     });
 
     if (!booking) {
@@ -113,12 +123,39 @@ export default async function handler(
     let calendarLink = params.calendarLink;
     let tutorCancelUrl: string | undefined;
 
+    // Canonical booking schedule comes from DB to prevent client-side timezone/date drift.
+    const canonicalDateIso = booking.date.toISOString().split('T')[0] ?? params.date;
+    const canonicalDateDisplay = booking.date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC',
+    });
+    const canonicalStartTime = booking.time;
+    const canonicalEndTime = calculateEndTime(canonicalStartTime);
+    const canonicalTutorTimezone = booking.tutor.timezone ?? tutorTimezone ?? params.timeZone ?? 'America/Los_Angeles';
+    const canonicalTutorName = `${booking.tutor.firstName} ${booking.tutor.lastName}`.trim() || params.tutorName;
+    const canonicalTutorEmail = booking.tutor.email || params.tutorEmail;
+
+    if (
+      params.date !== canonicalDateIso ||
+      params.startTime !== canonicalStartTime ||
+      params.tutorEmail !== canonicalTutorEmail
+    ) {
+      console.warn(
+        `Booking ${bookingId}: client payload differed from canonical booking schedule. ` +
+        `Incoming date/time/email=${params.date} ${params.startTime} ${params.tutorEmail}; ` +
+        `Canonical=${canonicalDateIso} ${canonicalStartTime} ${canonicalTutorEmail}`
+      );
+    }
+
     // If there's no valid meeting link, create a Google Calendar event with Meet
     if (!isValidUrl(meetingLink)) {
       try {
-        const timezone = tutorTimezone ?? 'America/Los_Angeles';
-        const { startTime, endTime } = parseBookingDateTime(params.date, params.startTime, timezone);
-        const { summary, description } = formatBookingForCalendar(params.tutorName, params.studentName);
+        const timezone = canonicalTutorTimezone;
+        const { startTime, endTime } = parseBookingDateTime(canonicalDateIso, canonicalStartTime, timezone);
+        const { summary, description } = formatBookingForCalendar(canonicalTutorName, params.studentName);
 
         const eventDetails: CalendarEventDetails = {
           summary,
@@ -126,9 +163,9 @@ export default async function handler(
           startTime,
           endTime,
           timezone,
-          tutorEmail: params.tutorEmail,
+          tutorEmail: canonicalTutorEmail,
           studentEmail: params.studentEmail,
-          tutorName: params.tutorName,
+          tutorName: canonicalTutorName,
           studentName: params.studentName,
         };
 
@@ -148,7 +185,7 @@ export default async function handler(
                 meetLink: meetingLink || null,
                 calendarEventId: calendarResult.eventId || null,
                 calendarHtmlLink: calendarLink || null,
-                tutorEmail: params.tutorEmail,
+                tutorEmail: canonicalTutorEmail,
               },
             });
             console.log(`Updated booking ${bookingId} with calendar info`);
@@ -163,14 +200,14 @@ export default async function handler(
     }
 
     const emailParams: BookingConfirmationParams = {
-      tutorName: params.tutorName,
+      tutorName: canonicalTutorName,
       studentName: params.studentName,
-      date: params.date,
-      startTime: params.startTime,
-      endTime: params.endTime,
-      timeZone: params.timeZone,
+      date: canonicalDateDisplay,
+      startTime: canonicalStartTime,
+      endTime: canonicalEndTime,
+      timeZone: canonicalTutorTimezone,
       studentEmail: params.studentEmail,
-      tutorEmail: params.tutorEmail,
+      tutorEmail: canonicalTutorEmail,
       meetingLink,
       calendarLink,
       tutorCancelUrl,
@@ -191,13 +228,13 @@ export default async function handler(
 
       const tutorTemplate = tutorBookingConfirmationEmail(emailParams);
       const tutorResult = await sendEmail({
-        to: params.tutorEmail,
+        to: canonicalTutorEmail,
         subject: tutorTemplate.subject,
         html: tutorTemplate.html,
         text: tutorTemplate.text,
       });
       results.tutorEmail = tutorResult;
-      console.log(`Tutor email to ${params.tutorEmail}: ${tutorResult.success ? 'sent' : 'failed'}`);
+      console.log(`Tutor email to ${canonicalTutorEmail}: ${tutorResult.success ? 'sent' : 'failed'}`);
     }
 
     if (type === 'student' || type === 'both') {

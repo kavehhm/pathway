@@ -133,6 +133,18 @@ enum PlatformOwner {
   KAVEH
 }
 
+enum BookingEventType {
+  BOOKING_CREATED
+  CALENDAR_CREATED
+  CALENDAR_FAILED
+  EMAILS_SENT
+  EMAILS_FAILED
+  WEBHOOK_FALLBACK_TRIGGERED
+  WEBHOOK_FALLBACK_SKIPPED
+  PAYMENT_VERIFIED
+  PAYMENT_VERIFY_FAILED
+}
+
 model MentorPayout {
   id               String       @id @default(uuid())
   mentorId         String
@@ -210,6 +222,7 @@ model Booking {
   stripeRefundId        String?
   tutor                 User     @relation("TutorBookings", fields: [tutorId], references: [clerkId])
   review                Review?  @relation("BookingReview")
+  eventLogs             BookingEventLog[]
 
   @@unique([tutorId, date, time])
   @@index([tutorId])
@@ -220,6 +233,27 @@ model Booking {
   @@index([tutorCancelTokenHash])
   @@index([studentRescheduleTokenHash])
   @@index([studentRefundTokenHash])
+}
+
+model BookingEventLog {
+  id                    String           @id @default(uuid())
+  bookingId             String?
+  booking               Booking?         @relation(fields: [bookingId], references: [id])
+  eventType             BookingEventType
+  message               String
+  tutorId               String?
+  tutorEmail            String?
+  studentEmail          String?
+  totalAmountCents      Int?
+  platformFeeCents      Int?
+  mentorEarningsCents   Int?
+  stripePaymentIntentId String?
+  metadata              Json?
+  createdAt             DateTime         @default(now())
+
+  @@index([bookingId, createdAt])
+  @@index([eventType, createdAt])
+  @@index([createdAt])
 }
 
 model Course {

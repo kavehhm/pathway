@@ -254,6 +254,38 @@ const TIMEZONE_UTC_OFFSETS: Record<string, number> = {
   'Pacific/Honolulu': -10,
 };
 
+function parseShortOffsetToHours(shortOffset: string): number | null {
+  const match = shortOffset.match(/^GMT([+-])(\d{1,2})(?::?(\d{2}))?$/i);
+  if (!match) return null;
+  const sign = (match[1] ?? '+') === '-' ? -1 : 1;
+  const hours = parseInt(match[2] ?? '0', 10);
+  const minutes = parseInt(match[3] ?? '0', 10);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+  return sign * (hours + (minutes / 60));
+}
+
+function getTimezoneOffsetHours(timezone: string): number {
+  if (timezone in TIMEZONE_UTC_OFFSETS) {
+    return TIMEZONE_UTC_OFFSETS[timezone] ?? -8;
+  }
+
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      timeZoneName: 'shortOffset',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).formatToParts(new Date());
+    const offsetPart = parts.find((p) => p.type === 'timeZoneName')?.value ?? '';
+    const parsed = parseShortOffsetToHours(offsetPart);
+    if (parsed !== null) return parsed;
+  } catch (error) {
+    console.warn(`Failed to resolve timezone offset for ${timezone}:`, error);
+  }
+
+  return -8;
+}
+
 const ABBREV_TO_IANA: Record<string, string> = {
   'PST': 'America/Los_Angeles',
   'PDT': 'America/Los_Angeles',
@@ -301,7 +333,7 @@ export function parseBookingDateTime(
     hours = 0;
   }
 
-  const utcOffset = TIMEZONE_UTC_OFFSETS[timezone] ?? -8;
+  const utcOffset = getTimezoneOffsetHours(timezone);
   const offsetSign = utcOffset >= 0 ? '+' : '-';
   const absOffset = Math.abs(utcOffset);
   const offsetHours = Math.floor(absOffset);

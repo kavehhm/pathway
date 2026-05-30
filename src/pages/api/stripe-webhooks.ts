@@ -16,6 +16,7 @@ import {
 import { isValidUrl } from '~/lib/validateUrl';
 import { issueTutorCancelToken } from '~/lib/bookingActions';
 import { distributePlatformProfit } from '~/lib/platformProfitDistribution';
+import { createBookingEventLog } from '~/lib/bookingEventLog';
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
@@ -239,8 +240,33 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   if (booking.earningsProcessed) {
     diag.calendarSkipped = 'client handling (earningsProcessed=true)';
     console.log(`Booking ${booking.id}: earningsProcessed=true → client handles emails/calendar`);
+    await createBookingEventLog(db, {
+      bookingId: booking.id,
+      eventType: 'WEBHOOK_FALLBACK_SKIPPED',
+      message: 'Webhook fallback skipped because earningsProcessed=true',
+      tutorId: booking.tutor.clerkId,
+      tutorEmail: booking.tutor.email,
+      studentEmail: booking.studentEmail ?? undefined,
+      totalAmountCents: booking.totalAmountCents ?? undefined,
+      platformFeeCents: booking.platformFeeCents ?? undefined,
+      mentorEarningsCents: booking.mentorEarningsCents ?? undefined,
+      stripePaymentIntentId: paymentIntent.id,
+    });
     return diag;
   }
+
+  await createBookingEventLog(db, {
+    bookingId: booking.id,
+    eventType: 'WEBHOOK_FALLBACK_TRIGGERED',
+    message: 'Webhook fallback triggered because earningsProcessed=false',
+    tutorId: booking.tutor.clerkId,
+    tutorEmail: booking.tutor.email,
+    studentEmail: booking.studentEmail ?? undefined,
+    totalAmountCents: booking.totalAmountCents ?? undefined,
+    platformFeeCents: booking.platformFeeCents ?? undefined,
+    mentorEarningsCents: booking.mentorEarningsCents ?? undefined,
+    stripePaymentIntentId: paymentIntent.id,
+  });
 
   // Safety net: bookSession didn't run or didn't credit earnings.
   // Process emails and calendar here as a fallback.
@@ -301,10 +327,39 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       tutor: emailResult.tutorEmail.success,
       student: emailResult.studentEmail.success,
     };
+    await createBookingEventLog(db, {
+      bookingId: booking.id,
+      eventType: emailResult.tutorEmail.success && emailResult.studentEmail.success ? 'EMAILS_SENT' : 'EMAILS_FAILED',
+      message: `Webhook email results: tutor=${emailResult.tutorEmail.success} student=${emailResult.studentEmail.success}`,
+      tutorId: booking.tutor.clerkId,
+      tutorEmail,
+      studentEmail,
+      totalAmountCents: booking.totalAmountCents ?? undefined,
+      platformFeeCents: booking.platformFeeCents ?? undefined,
+      mentorEarningsCents: booking.mentorEarningsCents ?? undefined,
+      stripePaymentIntentId: paymentIntent.id,
+      metadata: {
+        tutorError: emailResult.tutorEmail.error,
+        studentError: emailResult.studentEmail.error,
+      },
+    });
     console.log(`Email results - Tutor: ${emailResult.tutorEmail.success}, Student: ${emailResult.studentEmail.success}`);
   } catch (error: any) {
     diag.errors.push(`Email exception: ${error.message}`);
     console.error(`Failed to send confirmation emails for booking ${booking.id}:`, error);
+    await createBookingEventLog(db, {
+      bookingId: booking.id,
+      eventType: 'EMAILS_FAILED',
+      message: 'Webhook email send exception',
+      tutorId: booking.tutor.clerkId,
+      tutorEmail,
+      studentEmail,
+      totalAmountCents: booking.totalAmountCents ?? undefined,
+      platformFeeCents: booking.platformFeeCents ?? undefined,
+      mentorEarningsCents: booking.mentorEarningsCents ?? undefined,
+      stripePaymentIntentId: paymentIntent.id,
+      metadata: { error: error.message },
+    });
   }
 
   let meetLink = tutorMeetingLink ?? '';
@@ -329,10 +384,36 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       calendarEventId = calendarResult.eventId;
       calendarHtmlLink = calendarResult.htmlLink;
       diag.calendarCreated = true;
+      await createBookingEventLog(db, {
+        bookingId: booking.id,
+        eventType: 'CALENDAR_CREATED',
+        message: 'Webhook created Google Calendar event',
+        tutorId: booking.tutor.clerkId,
+        tutorEmail,
+        studentEmail,
+        totalAmountCents: booking.totalAmountCents ?? undefined,
+        platformFeeCents: booking.platformFeeCents ?? undefined,
+        mentorEarningsCents: booking.mentorEarningsCents ?? undefined,
+        stripePaymentIntentId: paymentIntent.id,
+        metadata: { calendarEventId, calendarHtmlLink },
+      });
     } catch (error: any) {
       diag.calendarCreated = false;
       diag.errors.push(`Calendar failed: ${error.message}`);
       console.error(`Failed to create calendar event for booking ${booking.id}:`, error);
+      await createBookingEventLog(db, {
+        bookingId: booking.id,
+        eventType: 'CALENDAR_FAILED',
+        message: 'Webhook failed to create Google Calendar event',
+        tutorId: booking.tutor.clerkId,
+        tutorEmail,
+        studentEmail,
+        totalAmountCents: booking.totalAmountCents ?? undefined,
+        platformFeeCents: booking.platformFeeCents ?? undefined,
+        mentorEarningsCents: booking.mentorEarningsCents ?? undefined,
+        stripePaymentIntentId: paymentIntent.id,
+        metadata: { error: error.message },
+      });
       markBookingSchedulingFailed(booking.id, error.message).catch((e: unknown) => {
         console.error('Failed to mark scheduling failed:', e);
       });

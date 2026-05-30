@@ -207,6 +207,7 @@ const MySessions = () => {
                                 year: 'numeric',
                                 month: 'long',
                                 day: 'numeric',
+                                timeZone: 'UTC',
                               })}{' '}
                               at {booking.time}
                             </p>
@@ -370,6 +371,7 @@ const MySessions = () => {
                                 year: 'numeric',
                                 month: 'long',
                                 day: 'numeric',
+                                timeZone: 'UTC',
                               })}{' '}
                               at {booking.time}
                             </p>

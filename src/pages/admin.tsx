@@ -39,6 +39,18 @@ export default function AdminDashboard() {
     });
   };
 
+  const formatDateTime = (date: Date | string) => {
+    return new Date(date).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  };
+
   if (!isLoaded || !isSignedIn) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -305,6 +317,56 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <p className="text-gray-500 text-center py-8">No recent bookings</p>
+            )}
+          </div>
+
+          {/* Info Box */}
+          <div className="mt-8 bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Booking Event Logs</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Exact audit trail for booking/payment/scheduling events.
+            </p>
+            {stats?.bookingEventLogs && stats.bookingEventLogs.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1200px]">
+                  <thead>
+                    <tr className="text-left text-sm text-gray-500 border-b border-gray-200">
+                      <th className="pb-3 font-medium">Timestamp</th>
+                      <th className="pb-3 font-medium">Event</th>
+                      <th className="pb-3 font-medium">Booking ID</th>
+                      <th className="pb-3 font-medium">Tutor Email</th>
+                      <th className="pb-3 font-medium">Student Email</th>
+                      <th className="pb-3 font-medium text-right">Total</th>
+                      <th className="pb-3 font-medium text-right">Platform Fee</th>
+                      <th className="pb-3 font-medium text-right">Mentor Earnings</th>
+                      <th className="pb-3 font-medium">Stripe PI</th>
+                      <th className="pb-3 font-medium">Message</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.bookingEventLogs.map((log) => (
+                      <tr key={log.id} className="border-b border-gray-100 last:border-0 align-top">
+                        <td className="py-3 text-gray-900 whitespace-nowrap">{formatDateTime(log.createdAt)}</td>
+                        <td className="py-3 whitespace-nowrap">
+                          <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
+                            {log.eventType}
+                          </span>
+                        </td>
+                        <td className="py-3 text-xs text-gray-600 font-mono">{log.bookingId ?? '-'}</td>
+                        <td className="py-3 text-sm text-gray-700">{log.tutorEmail ?? '-'}</td>
+                        <td className="py-3 text-sm text-gray-700">{log.studentEmail ?? '-'}</td>
+                        <td className="py-3 text-right text-gray-900">{formatCurrency(log.totalAmountCents)}</td>
+                        <td className="py-3 text-right text-green-700">{formatCurrency(log.platformFeeCents)}</td>
+                        <td className="py-3 text-right text-gray-700">{formatCurrency(log.mentorEarningsCents)}</td>
+                        <td className="py-3 text-xs text-gray-600 font-mono">{log.stripePaymentIntentId ?? '-'}</td>
+                        <td className="py-3 text-sm text-gray-700">{log.message}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-8">No booking event logs yet</p>
             )}
           </div>
 
