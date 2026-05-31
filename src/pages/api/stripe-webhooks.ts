@@ -17,6 +17,11 @@ import { isValidUrl } from '~/lib/validateUrl';
 import { issueTutorCancelToken } from '~/lib/bookingActions';
 import { distributePlatformProfit } from '~/lib/platformProfitDistribution';
 import { createBookingEventLog } from '~/lib/bookingEventLog';
+import {
+  claimBookingNotificationSend,
+  markBookingNotificationFailed,
+  markBookingNotificationSent,
+} from '~/lib/bookingNotificationState';
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
@@ -233,6 +238,12 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   diag.bookingId = booking.id;
   console.log(`Found booking ${booking.id} for PaymentIntent: ${paymentIntent.id}`);
 
+  if (!booking.tutor) {
+    diag.errors.push('Tutor account missing for booking');
+    console.error(`Booking ${booking.id} has no tutor relation; skipping scheduling/emails`);
+    return diag;
+  }
+
   // If bookSession already ran (earningsProcessed=true), the client-side code
   // will call /api/send-booking-email to handle emails + calendar in its own
   // request with a full timeout budget.  The webhook only acts as a safety net
@@ -244,6 +255,24 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       bookingId: booking.id,
       eventType: 'WEBHOOK_FALLBACK_SKIPPED',
       message: 'Webhook fallback skipped because earningsProcessed=true',
+      tutorId: booking.tutor.clerkId,
+      tutorEmail: booking.tutor.email,
+      studentEmail: booking.studentEmail ?? undefined,
+      totalAmountCents: booking.totalAmountCents ?? undefined,
+      platformFeeCents: booking.platformFeeCents ?? undefined,
+      mentorEarningsCents: booking.mentorEarningsCents ?? undefined,
+      stripePaymentIntentId: paymentIntent.id,
+    });
+    return diag;
+  }
+
+  const claimed = await claimBookingNotificationSend(booking.id);
+  if (!claimed) {
+    diag.calendarSkipped = 'notifications already sent or processing';
+    await createBookingEventLog(db, {
+      bookingId: booking.id,
+      eventType: 'WEBHOOK_FALLBACK_SKIPPED',
+      message: 'Webhook fallback skipped: notification send already sent/processing',
       tutorId: booking.tutor.clerkId,
       tutorEmail: booking.tutor.email,
       studentEmail: booking.studentEmail ?? undefined,
@@ -425,7 +454,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     diag.calendarSkipped = 'already created';
   }
 
-  db.booking.update({
+  await db.booking.update({
     where: { id: booking.id },
     data: {
       studentEmail,
@@ -438,6 +467,12 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   }).catch((error: any) => {
     console.error(`Failed to update booking with meeting info:`, error);
   });
+
+  if (diag.errors.length === 0) {
+    await markBookingNotificationSent(booking.id);
+  } else {
+    await markBookingNotificationFailed(booking.id, diag.errors.join(' | '));
+  }
 
   // Credit the tutor's wallet if bookSession hasn't already done so
   const earningsCents = booking.mentorEarningsCents;

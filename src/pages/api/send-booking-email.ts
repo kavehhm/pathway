@@ -92,6 +92,9 @@ export default async function handler(
     if (!booking) {
       return res.status(404).json({ success: false, error: 'Booking not found' });
     }
+    if (!booking.tutor) {
+      return res.status(409).json({ success: false, error: 'Tutor account no longer available for this booking' });
+    }
 
     const canAccess = booking.tutorId === userId || booking.studentClerkId === userId;
     if (!canAccess) {

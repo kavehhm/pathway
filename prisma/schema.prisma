@@ -181,7 +181,7 @@ model PlatformOwnerPayout {
 
 model Booking {
   id                    String   @id @default(uuid())
-  tutorId               String
+  tutorId               String?
   date                  DateTime
   time                  String
   status                String   @default("confirmed")
@@ -206,6 +206,12 @@ model Booking {
   calendarEventId       String?  // Google Calendar event ID
   meetLink              String?  // Google Meet link (or tutor's custom meeting link)
   calendarHtmlLink      String?  // Google Calendar event link for viewing
+  notificationStatus    String   @default("pending") // pending|processing|sent|failed
+  notificationInFlight  Boolean  @default(false)
+  notificationAttemptCount Int   @default(0)
+  notificationLastAttemptAt DateTime?
+  notificationSentAt    DateTime?
+  notificationLastError String?
   // Tokenized booking actions for guest-safe flows
   tutorCancelTokenHash          String?
   tutorCancelTokenExpiresAt     DateTime?
@@ -220,7 +226,7 @@ model Booking {
   tutorCancelledAt      DateTime?
   refundedAt            DateTime?
   stripeRefundId        String?
-  tutor                 User     @relation("TutorBookings", fields: [tutorId], references: [clerkId])
+  tutor                 User?    @relation("TutorBookings", fields: [tutorId], references: [clerkId], onDelete: SetNull)
   review                Review?  @relation("BookingReview")
   eventLogs             BookingEventLog[]
 

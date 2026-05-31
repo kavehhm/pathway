@@ -79,6 +79,9 @@ const bookingActionInclude = {
 } as const;
 
 type BookingWithActionContext = Prisma.BookingGetPayload<{ include: typeof bookingActionInclude }> | null;
+type BookingWithTutor = Exclude<BookingWithActionContext, null> & {
+  tutor: NonNullable<Exclude<BookingWithActionContext, null>['tutor']>;
+};
 
 export class BookingActionError extends Error {
   code:
@@ -136,7 +139,7 @@ function buildActionUrl(path: string, token: string): string {
   return `${baseUrl}${path}?token=${encodeURIComponent(token)}`;
 }
 
-async function getBookingFromToken(kind: TokenKind, token: string): Promise<NonNullable<BookingWithActionContext>> {
+async function getBookingFromToken(kind: TokenKind, token: string): Promise<BookingWithTutor> {
   const tokenTrimmed = token.trim();
   if (!tokenTrimmed) {
     throw new BookingActionError('INVALID_TOKEN', 'Missing token.');
@@ -153,6 +156,9 @@ async function getBookingFromToken(kind: TokenKind, token: string): Promise<NonN
   if (!booking) {
     throw new BookingActionError('INVALID_TOKEN', 'This link is invalid or has already been replaced.');
   }
+  if (!booking.tutor) {
+    throw new BookingActionError('INVALID_STATE', 'This tutor account is no longer available.');
+  }
 
   const expiresAt = booking[expiresField];
   const usedAt = booking[usedField];
@@ -165,10 +171,10 @@ async function getBookingFromToken(kind: TokenKind, token: string): Promise<NonN
     throw new BookingActionError('TOKEN_ALREADY_USED', 'This link has already been used.');
   }
 
-  return booking;
+  return booking as BookingWithTutor;
 }
 
-function buildTutorName(booking: NonNullable<BookingWithActionContext>): string {
+function buildTutorName(booking: BookingWithTutor): string {
   return `${booking.tutor.firstName} ${booking.tutor.lastName}`.trim();
 }
 
@@ -199,7 +205,7 @@ function parse12HourTimeToMinutes(timeStr: string): number | null {
 }
 
 function isTimeInTutorAvailability(
-  availability: NonNullable<BookingWithActionContext>['tutor']['availability'],
+  availability: NonNullable<NonNullable<BookingWithActionContext>['tutor']>['availability'],
   bookingDate: Date,
   targetTime: string,
 ): boolean {
@@ -570,15 +576,19 @@ export async function refundBookingByToken(token: string): Promise<{ refunded: b
   }
 
   const earningsToReverse = booking.mentorEarningsCents ?? 0;
+  if (!booking.tutorId) {
+    throw new BookingActionError('INVALID_STATE', 'Tutor record is missing for this booking.');
+  }
+  const tutorId = booking.tutorId;
   const now = new Date();
 
   await db.$transaction(async (tx) => {
     if (earningsToReverse > 0 && booking.earningsProcessed) {
-      let wallet = await tx.mentorWallet.findUnique({ where: { mentorId: booking.tutorId } });
+      let wallet = await tx.mentorWallet.findUnique({ where: { mentorId: tutorId } });
 
       if (!wallet) {
         wallet = await tx.mentorWallet.create({
-          data: { mentorId: booking.tutorId, availableCents: 0, pendingCents: 0 },
+          data: { mentorId: tutorId, availableCents: 0, pendingCents: 0 },
         });
       }
 
@@ -592,7 +602,7 @@ export async function refundBookingByToken(token: string): Promise<{ refunded: b
       }
 
       await tx.mentorWallet.update({
-        where: { mentorId: booking.tutorId },
+        where: { mentorId: tutorId },
         data: {
           availableCents: nextAvailable,
           pendingCents: nextPending,
@@ -601,7 +611,7 @@ export async function refundBookingByToken(token: string): Promise<{ refunded: b
 
       await tx.mentorLedgerEntry.create({
         data: {
-          mentorId: booking.tutorId,
+          mentorId: tutorId,
           type: 'ADJUSTMENT',
           amountCents: -earningsToReverse,
           balanceAfterCents: booking.fundsReleased ? nextAvailable : nextPending,

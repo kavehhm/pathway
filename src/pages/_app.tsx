@@ -23,9 +23,18 @@ const MyApp: AppType = ({ Component, pageProps }) => {
       <div><Toaster/></div>
 
       <Head>
-        <title>Pathway</title>
-        <meta name="description" content="Get the best tutoring help, when you need it, where you need it." />
-        <link rel="icon" href="/ourlogo720.png" />
+        <title>Pathway Tutors | Mentorship From Top College Students</title>
+        <meta
+          name="description"
+          content="Connect with verified college students from Yale, Duke, Cornell, UCLA, and other top universities for tutoring, mentorship, transfer guidance, internships, and academic success."
+        />
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png" />
+        <link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png" />
+        <link rel="manifest" href="/site.webmanifest" />
         
         {/* Open Graph / iMessage preview metadata */}
         <meta property="og:type" content="website" />

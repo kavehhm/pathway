@@ -18,6 +18,11 @@ import {
 } from "~/lib/googleCalendar";
 import { calculateEndTime, sendBookingConfirmationEmails } from "~/lib/sendBookingEmails";
 import { issueTutorCancelToken } from "~/lib/bookingActions";
+import {
+  claimBookingNotificationSend,
+  markBookingNotificationFailed,
+  markBookingNotificationSent,
+} from "~/lib/bookingNotificationState";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
@@ -896,7 +901,7 @@ export const postRouter = createTRPCRouter({
         }),
         z.object({
           id: z.string(),
-          tutorId: z.string(),
+          tutorId: z.string().nullable(),
           studentClerkId: z.string().nullable(),
           date: z.date(),
           time: z.string(),
@@ -1340,6 +1345,21 @@ export const postRouter = createTRPCRouter({
 
         // Primary scheduling + notification path lives here (not webhook-dependent).
         if (tutor) {
+          const claimed = await claimBookingNotificationSend(result.id);
+          if (!claimed) {
+            await createBookingEventLog(ctx.db, {
+              bookingId: result.id,
+              eventType: "WEBHOOK_FALLBACK_SKIPPED",
+              message: "Notification send skipped: already sent or currently processing",
+              tutorId,
+              tutorEmail: tutor.email,
+              studentEmail,
+              totalAmountCents: totalAmount,
+              platformFeeCents: platformFee,
+              mentorEarningsCents: tutorAmount,
+              stripePaymentIntentId: paymentIntentId,
+            });
+          } else {
           try {
             const tutorName = `${tutor.firstName} ${tutor.lastName}`.trim();
             const tutorTimezone = tutor.timezone ?? "America/Los_Angeles";
@@ -1439,9 +1459,14 @@ export const postRouter = createTRPCRouter({
                 calendarHtmlLink: calendarLink,
               },
             });
+            await markBookingNotificationSent(result.id);
           } catch (schedulingError) {
             // Booking/payment already succeeded; keep user flow successful and rely on webhook fallback + logs.
             console.error(`Failed scheduling/notifications for booking ${result.id}:`, schedulingError);
+            await markBookingNotificationFailed(
+              result.id,
+              schedulingError instanceof Error ? schedulingError.message : String(schedulingError),
+            );
             await createBookingEventLog(ctx.db, {
               bookingId: result.id,
               eventType: "CALENDAR_FAILED",
@@ -1457,6 +1482,7 @@ export const postRouter = createTRPCRouter({
                 error: schedulingError instanceof Error ? schedulingError.message : String(schedulingError),
               },
             });
+          }
           }
         }
 
@@ -1767,6 +1793,7 @@ export const postRouter = createTRPCRouter({
           studentClerkId: input,
           status: 'completed',
           free: false,
+          tutorId: { not: null },
         },
         include: {
           tutor: {
@@ -1785,7 +1812,8 @@ export const postRouter = createTRPCRouter({
         },
       });
 
-      const tutorIds = [...new Set(bookings.map((booking) => booking.tutor.clerkId))];
+      const bookingsWithTutor = bookings.filter((booking) => booking.tutor);
+      const tutorIds = [...new Set(bookingsWithTutor.map((booking) => booking.tutor!.clerkId))];
       const tutorReviews =
         tutorIds.length > 0
           ? await ctx.db.review.findMany({
@@ -1809,17 +1837,17 @@ export const postRouter = createTRPCRouter({
       }
 
       const latestBookingByTutor = new Map<string, string>();
-      for (const booking of bookings) {
-        if (!latestBookingByTutor.has(booking.tutor.clerkId)) {
-          latestBookingByTutor.set(booking.tutor.clerkId, booking.id);
+      for (const booking of bookingsWithTutor) {
+        if (!latestBookingByTutor.has(booking.tutor!.clerkId)) {
+          latestBookingByTutor.set(booking.tutor!.clerkId, booking.id);
         }
       }
 
-      return bookings.map((booking) => {
-        const tutorReview = latestReviewByTutor.get(booking.tutor.clerkId) ?? null;
+      return bookingsWithTutor.map((booking) => {
+        const tutorReview = latestReviewByTutor.get(booking.tutor!.clerkId) ?? null;
         const reviewAnchorBookingId = tutorReview
           ? tutorReview.bookingId
-          : latestBookingByTutor.get(booking.tutor.clerkId);
+          : latestBookingByTutor.get(booking.tutor!.clerkId);
 
         return {
           ...booking,
@@ -2802,7 +2830,7 @@ export const postRouter = createTRPCRouter({
         mentorBreakdown,
         recentBookings: recentBookings.map(b => ({
           id: b.id,
-          tutorName: `${b.tutor.firstName} ${b.tutor.lastName}`,
+          tutorName: b.tutor ? `${b.tutor.firstName} ${b.tutor.lastName}` : 'Deleted Tutor',
           date: b.date,
           time: b.time,
           totalAmount: b.totalAmountCents,

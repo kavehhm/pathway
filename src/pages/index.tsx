@@ -118,18 +118,24 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Pathway</title>
+        <title>Pathway Tutors | Mentorship From Top College Students</title>
         <meta
           name="description"
-          content="Pathway helps you find and book a call with someone who just did what you’re trying to do — internships, transfers, tough classes, or admissions."
+          content="Connect with verified college students from Yale, Duke, Cornell, UCLA, and other top universities for tutoring, mentorship, transfer guidance, internships, and academic success."
         />
-        <link rel="icon" href="/ourlogo720.png" />
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png" />
+        <link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png" />
+        <link rel="manifest" href="/site.webmanifest" />
         
         {/* Open Graph / iMessage preview metadata */}
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://www.pathwaytutors.com" />
-        <meta property="og:title" content="Pathway" />
-        <meta property="og:description" content="Pathway helps you find and book a call with someone who just did what you’re trying to do — internships, transfers, tough classes, or admissions." />
+        <meta property="og:title" content="Pathway Tutors | Mentorship From Top College Students" />
+        <meta property="og:description" content="Connect with verified college students from Yale, Duke, Cornell, UCLA, and other top universities for tutoring, mentorship, transfer guidance, internships, and academic success." />
         <meta property="og:image" content="https://www.pathwaytutors.com/og-image.png" />
         <meta property="og:image:secure_url" content="https://www.pathwaytutors.com/og-image.png" />
         <meta property="og:image:type" content="image/png" />
@@ -148,8 +154,8 @@ export default function Home() {
         
         {/* Twitter Card metadata */}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Pathway" />
-        <meta name="twitter:description" content="Find and book a call with someone who just did what you’re trying to do." />
+        <meta name="twitter:title" content="Pathway Tutors | Mentorship From Top College Students" />
+        <meta name="twitter:description" content="Connect with verified college students from Yale, Duke, Cornell, UCLA, and other top universities for tutoring, mentorship, transfer guidance, internships, and academic success." />
         <meta name="twitter:image" content="https://www.pathwaytutors.com/og-image.png" />
         <meta name="twitter:image:alt" content="Pathway" />
         

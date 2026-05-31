@@ -188,19 +188,19 @@ const MySessions = () => {
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-4">
                         <Link
-                          href={`/tutors/${booking.tutor.username}`}
+                          href={booking.tutor?.username ? `/tutors/${booking.tutor.username}` : '#'}
                           className="flex items-center gap-4 group"
                         >
-                          {booking.tutor.imageSrc && (
+                          {booking.tutor?.imageSrc && (
                             <img
                               src={booking.tutor.imageSrc}
-                              alt={`${booking.tutor.firstName} ${booking.tutor.lastName}`}
+                              alt={`${booking.tutor.firstName ?? 'Deleted'} ${booking.tutor.lastName ?? 'Tutor'}`}
                               className="h-16 w-16 rounded-full object-cover ring-2 ring-transparent group-hover:ring-violet-400 transition-all"
                             />
                           )}
                           <div>
                             <span className="text-lg font-semibold text-gray-900 group-hover:text-violet-600 transition-colors">
-                              {booking.tutor.firstName} {booking.tutor.lastName}
+                              {booking.tutor ? `${booking.tutor.firstName} ${booking.tutor.lastName}` : 'Deleted Tutor'}
                             </span>
                             <p className="text-sm text-gray-500">
                               {new Date(booking.date).toLocaleDateString('en-US', {
@@ -243,7 +243,7 @@ const MySessions = () => {
                         {booking.tutorReview.tutorResponse && (
                           <div className="mt-4 border-t border-gray-200 pt-4">
                             <p className="text-sm font-semibold text-gray-900 mb-1">
-                              Response from {booking.tutor.firstName}:
+                              Response from {booking.tutor?.firstName ?? 'Tutor'}:
                             </p>
                             <p className="text-sm text-gray-700">{booking.tutorReview.tutorResponse}</p>
                           </div>
@@ -281,8 +281,8 @@ const MySessions = () => {
 
                           <div className="flex gap-3">
                             <button
-                              onClick={() => handleSubmitReview(booking.id, booking.tutor.clerkId)}
-                              disabled={createReview.isLoading || updateReview.isLoading || rating === 0}
+                              onClick={() => booking.tutor && handleSubmitReview(booking.id, booking.tutor.clerkId)}
+                              disabled={createReview.isLoading || updateReview.isLoading || rating === 0 || !booking.tutor}
                               className="inline-flex items-center rounded-lg bg-violet-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {createReview.isLoading || updateReview.isLoading ? (
